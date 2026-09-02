@@ -22,7 +22,8 @@ the conversation.
 ## Order of operations
 
 ```bash
-cd tv-debloat
+git clone https://github.com/Anthoas/claude.git
+cd claude/tv-debloat
 
 # (a) install adb, pair, connect  — approve the dialog on the TV
 bash scripts/00-setup.sh

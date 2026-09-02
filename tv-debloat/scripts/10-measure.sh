@@ -24,7 +24,7 @@ sed -i.bak 's/\r$//' "$D"/*.txt 2>/dev/null; rm -f "$D"/*.bak
 {
   echo "label: $LABEL"
   echo "taken: $(date -u '+%Y-%m-%d %H:%M:%SZ')"
-  grep -E '^\s+(Total RAM|Free RAM|Used RAM|Lost RAM|ZRAM):' "$D/dumpsys-meminfo.txt" | sed 's/^ *//'
+  grep -E '^[[:space:]]*(Total RAM|Free RAM|Used RAM|Lost RAM|ZRAM):' "$D/dumpsys-meminfo.txt" | sed 's/^ *//'
   echo "packages_total:    $(grep -c . "$D/packages-all.txt")"
   echo "packages_system:   $(grep -c . "$D/packages-system.txt")"
   echo "packages_disabled: $(grep -c . "$D/packages-disabled.txt")"
