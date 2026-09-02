@@ -1,0 +1,39 @@
+# GROUP 1 candidates: demos, screensavers, setup wizards, telemetry, printing,
+# phone-only leftovers. Reversible with `pm enable`. One glob per line.
+# Nothing here is disabled automatically — 20-triage.sh only classifies.
+*retaildemo*
+*.demo
+*demo.app*
+com.android.dreams.*
+com.google.android.backdrop
+com.android.wallpaper*
+com.android.printspooler
+com.google.android.printservice.recommendation
+com.android.bookmarkprovider
+com.android.bips
+com.google.android.partnersetup
+com.google.android.onetimeinitializer
+com.google.android.feedback
+com.google.android.syncadapters.*
+com.google.android.tungsten.setupwraith
+com.google.android.tungsten.overscan
+com.android.cellbroadcastreceiver*
+com.android.emergency
+com.android.traceur
+com.android.statementservice
+com.google.android.gms.location.history
+com.google.android.projection.gearhead
+com.google.ar.core
+com.android.hotwordenrollment.*
+com.google.android.apps.mediashell
+com.tcl.*log*
+com.tcl.*analytic*
+com.tcl.*report*
+com.tcl.*advert*
+com.tcl.*ad
+com.tcl.*ads*
+com.tcl.usermanual*
+com.tcl.helpcenter*
+com.tcl.quickstart*
+com.tcl.tvdemo*
+com.tcl.mediacenter.demo*

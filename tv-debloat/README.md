@@ -1,0 +1,81 @@
+# tv-debloat — TCL 43V6C
+
+Scripts that carry out the debloat exactly as specified: measure first, disable
+in batches of ten, record everything, undo with one command.
+
+**Why you are running these instead of me:** `192.168.1.43` is a private address
+on your home network. I run in a cloud container with no route to it, so I
+cannot open an adb session to your TV. Verified, not assumed — see the note in
+the conversation.
+
+## Ground rules baked into the scripts
+
+| Rule | How it is enforced |
+|---|---|
+| No uninstalls | `pm uninstall` appears nowhere; only `pm disable-user --user 0` |
+| No root / no flashing | Not present, not suggested |
+| Measure first | `10-measure.sh` refuses to report without a `before` capture |
+| Max 10 per batch | `30-disable-batch.sh` aborts at 11 |
+| Never-disable list | `data/protected.txt`, checked before every single disable |
+| Written record | `kapatilanlar.txt` + `DEBLOAT-LOG.md`, appended automatically |
+
+## Order of operations
+
+```bash
+cd tv-debloat
+
+# (a) install adb, pair, connect  — approve the dialog on the TV
+bash scripts/00-setup.sh
+# if the TV gave a port other than 5555:  export TV_ADDR=192.168.1.43:XXXXX
+
+# (b) baseline
+bash scripts/10-measure.sh before
+
+# (c) sort into 3 groups, then send me measurements/before/packages-all.txt
+bash scripts/20-triage.sh
+
+# start with group 1, ten at a time, testing between each
+split -l 10 triage-group1.txt batch-
+bash scripts/30-disable-batch.sh batch-aa "group 1: demos and screensavers"
+#   ... test the TV, then batch-ab, and so on
+
+# (d)+(e) animation scales and cache trim
+bash scripts/40-tweaks.sh
+
+# (f) reboot and re-measure
+adb -s 192.168.1.43:5555 reboot && sleep 60
+adb connect 192.168.1.43:5555
+bash scripts/10-measure.sh after
+bash scripts/50-report.sh
+```
+
+Home screen swap: read [HOME-SCREEN.md](HOME-SCREEN.md), then
+`bash scripts/60-flauncher.sh`.
+
+## The test after every batch
+
+Inputs/Source button -> HDMI switch -> Netflix opens -> YouTube opens -> sound
+-> on-screen keyboard in a search box -> Settings opens.
+
+Anything broken: re-enable that whole batch first, then bisect it.
+
+```bash
+while read p; do adb -s 192.168.1.43:5555 shell pm enable $p; done < batch-aa
+```
+
+## Undo everything
+
+```bash
+bash scripts/undo.sh --all && adb -s 192.168.1.43:5555 reboot
+```
+
+## Honest expectations
+
+Disabling preinstalled packages frees a modest amount of RAM and removes some
+background wakeups. It does not make a low-end SoC faster. In practice the
+perceived speed-up comes almost entirely from two things: the 0.5 animation
+scales, and replacing the ad-laden launcher. `dumpsys meminfo` before/after will
+show a real but small difference — do not expect it to be dramatic, and I would
+rather tell you that now than have you measure it and feel cheated.
+
+`pm trim-caches` frees **storage**, not RAM.

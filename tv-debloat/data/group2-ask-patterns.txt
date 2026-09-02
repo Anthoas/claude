@@ -1,0 +1,33 @@
+# GROUP 2: I will NOT classify these for you — they depend on what you use.
+# 20-triage.sh lists them and asks.
+com.netflix.*
+com.amazon.*
+com.disney.*
+com.wbd.*
+com.tubitv
+com.plexapp.*
+com.spotify.*
+com.google.android.youtube.tv*
+com.google.android.youtube.tvmusic
+com.google.android.youtube.tvkids
+com.google.android.videos
+com.google.android.music
+com.google.android.katniss
+com.google.android.tvrecommendations
+com.google.android.tts
+com.google.android.marvin.talkback
+com.google.android.apps.tachyon
+com.android.chrome
+com.android.calendar
+com.android.contacts
+com.android.providers.calendar
+com.android.providers.contacts
+com.google.android.gms.supervision
+com.google.android.apps.tv.dreamx
+com.tcl.channel*
+com.tcl.mediacenter*
+com.tcl.screenshare*
+com.tcl.miracast*
+com.tcl.smarthome*
+com.tcl.voice*
+com.tcl.assist*
