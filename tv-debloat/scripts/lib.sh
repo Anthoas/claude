@@ -13,8 +13,8 @@ c_red()  { printf '\033[31m%s\033[0m\n' "$*"; }
 c_grn()  { printf '\033[32m%s\033[0m\n' "$*"; }
 c_ylw()  { printf '\033[33m%s\033[0m\n' "$*"; }
 
-adbx()  { adb -s "$TV_ADDR" "$@"; }
-tvsh()  { adb -s "$TV_ADDR" shell "$@"; }
+adbx()  { adb -s "$TV_ADDR" "$@" < /dev/null; }
+tvsh()  { adb -s "$TV_ADDR" shell "$@" < /dev/null; }
 
 require_device() {
   if ! command -v adb >/dev/null 2>&1; then

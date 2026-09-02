@@ -1,0 +1,7 @@
+package:com.cybercat.adbappcontrol.tv
+package:me.efesser.flauncher
+package:app.zeniptv.mobile
+package:net.oqee.androidtv.store
+package:fr.tf1.mytf1
+package:com.esaba.downloader
+package:com.orange.owtv.tv

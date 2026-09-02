@@ -28,7 +28,7 @@ read -r -p "Proceed? [y/N] " a; case "$a" in y|Y) ;; *) echo "Cancelled."; exit 
 mkdir -p "$(dirname "$DISABLED_FILE")"; touch "$DISABLED_FILE" "$LOG_FILE"
 STAMP=$(date -u '+%Y-%m-%d %H:%M:%SZ')
 printf '\n### Batch %s — %s\n\n| package | result | undo |\n|---|---|---|\n' "$(basename "$BATCH")" "$STAMP" >> "$LOG_FILE"
-echo "_Reason: $REASON_" >> "$LOG_FILE"
+echo "_Reason: ${REASON}_" >> "$LOG_FILE"
 
 for p in $PKGS; do
   pkg_installed "$p" || continue
