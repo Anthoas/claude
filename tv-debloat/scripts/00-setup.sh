@@ -18,7 +18,11 @@ else
   case "$OS" in
     macos)
       command -v brew >/dev/null 2>&1 || { c_red "Homebrew missing. Install from https://brew.sh then re-run."; exit 1; }
-      brew install android-platform-tools ;;
+      # android-platform-tools is a Homebrew CASK, not a formula. `brew install`
+      # usually falls back to casks, but not on every configuration, so be explicit.
+      brew install --cask android-platform-tools \
+        || brew install android-platform-tools \
+        || true ;;
     linux)
       sudo apt-get update || c_ylw "apt-get update reported errors; continuing anyway"
       sudo apt-get install -y adb || sudo apt-get install -y android-tools-adb || true ;;
@@ -47,6 +51,8 @@ if ! command -v adb >/dev/null 2>&1; then
   echo "  Debian/Ubuntu : sudo apt-get install -y adb"
   echo "                  (if apt fails on a broken third-party PPA, disable it:"
   echo "                   ls /etc/apt/sources.list.d/  then move the offender aside)"
+  echo "  macOS         : brew install --cask android-platform-tools"
+  echo "                  (no Homebrew? install it from https://brew.sh first)"
   echo "  Fedora        : sudo dnf install android-tools"
   echo "  Arch          : sudo pacman -S android-tools"
   echo "  Any Linux/mac : download platform-tools from"
