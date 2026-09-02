@@ -108,6 +108,22 @@ C
   The TV will show:  IP:PORT  and a 6-digit code.
   NOTE: the PAIRING port is random and is NOT 5555.
 P
+  # An agent or a CI job runs this with stdin on /dev/null, which makes every
+  # read below return empty instantly and silently skip pairing. Say so loudly
+  # instead of pretending the step ran.
+  if [ ! -t 0 ]; then
+    c_red "stdin is not a terminal, so the pairing prompts cannot be answered."
+    c_red "Pairing was SKIPPED. This step is interactive by nature: the code is"
+    c_red "shown on the TV screen and changes every time."
+    echo
+    echo "Run these two commands yourself, in a real terminal:"
+    echo "    adb pair <PAIRING_IP:PORT>      # both shown on the TV, port is random"
+    echo "    adb connect <CONNECT_IP:PORT>   # a DIFFERENT port, also on that screen"
+    echo
+    echo "Then re-run this script, or skip straight to:"
+    echo "    bash scripts/10-measure.sh before"
+    exit 2
+  fi
   read -r -p "Pairing IP:PORT shown on the TV (blank to skip): " PP
   if [ -n "$PP" ]; then
     adb pair "$PP"
