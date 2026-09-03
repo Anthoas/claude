@@ -1,0 +1,10 @@
+label: before
+taken: 2026-09-02 21:01:46Z
+Total RAM: 1,807,408K (status normal)
+Free RAM:   634,041K (  373,929K cached pss +   187,444K cached kernel +    72,668K free)
+Used RAM: 1,097,190K (  862,098K used pss +   235,092K kernel)
+Lost RAM:   431,639K
+ZRAM:   107,124K physical used for   471,432K in swap (  665,596K total swap)
+packages_total:    139
+packages_system:   133
+packages_disabled: 2

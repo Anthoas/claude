@@ -1,0 +1,2 @@
+package:com.tcl.partnercustomizer
+package:com.tcl.messagebox
