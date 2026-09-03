@@ -38,3 +38,4 @@ com.tcl.ui_mediaCenter
 com.tcl.interactive
 com.tcl.t_solo
 com.tcl.hearaid
+me.efesser.flauncher

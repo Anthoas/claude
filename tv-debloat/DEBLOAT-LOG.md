@@ -103,3 +103,9 @@ _Reason: unknown-triage batch 2: TCL smart features redundant with FLauncher (no
 | `com.tcl.interactive` | disabled | `adb -s 192.168.1.43:5555 shell pm enable com.tcl.interactive` |
 | `com.tcl.t_solo` | disabled | `adb -s 192.168.1.43:5555 shell pm enable com.tcl.t_solo` |
 | `com.tcl.hearaid` | disabled | `adb -s 192.168.1.43:5555 shell pm enable com.tcl.hearaid` |
+
+### Home screen swap — 2026-09-03 13:42:24Z
+
+| package | result | undo |
+|---|---|---|
+| `me.efesser.flauncher` | disabled, Projectivy Launcher (`com.spocky.projengmenu`) is now HOME | `adb -s 192.168.1.43:5555 shell pm enable me.efesser.flauncher` |
