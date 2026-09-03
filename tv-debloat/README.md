@@ -53,6 +53,22 @@ bash scripts/50-report.sh
 Home screen swap: read [HOME-SCREEN.md](HOME-SCREEN.md), then
 `bash scripts/60-flauncher.sh`.
 
+## When the on-screen keyboard will not open
+
+FLauncher is a Flutter app and its text fields do not always bring up the
+system IME on Android TV. Type into it from the computer instead:
+
+```bash
+bash scripts/70-remote.sh shot          # see what the TV is showing
+bash scripts/70-remote.sh type "Films"  # type into the focused field
+bash scripts/70-remote.sh key ENTER     # confirm
+bash scripts/70-remote.sh keys          # list the key names
+```
+
+`adb input text` sends a US keymap, so accented characters are dropped or
+mangled - the script warns before sending them. Use `Series`, rename later
+if it matters. Spaces are escaped automatically.
+
 ## The test after every batch
 
 Inputs/Source button -> HDMI switch -> Netflix opens -> YouTube opens -> sound
