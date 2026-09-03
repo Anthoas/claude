@@ -80,6 +80,31 @@ Anything broken: re-enable that whole batch first, then bisect it.
 while read p; do adb -s 192.168.1.43:5555 shell pm enable $p; done < batch-aa
 ```
 
+## Changing launcher
+
+`65-launcher.sh` refuses to disable a launcher unless another enabled home
+screen would remain, so it cannot leave the TV booting to a black screen.
+
+```bash
+bash scripts/65-launcher.sh status                          # what is HOME now
+bash scripts/65-launcher.sh store com.spocky.projengmenu    # open its Play Store page on the TV
+bash scripts/65-launcher.sh disable me.efesser.flauncher    # only once the new one works
+```
+
+`store` opens the listing by intent, so you do not have to type in the Play
+Store search box - useful while the on-screen keyboard is broken.
+
+## Wallpaper
+
+```bash
+bash scripts/80-wallpaper.sh ~/Pictures/fond.jpg
+```
+
+Reports the resolution the TV's UI actually renders at (the panel may be 4K
+while Android draws at 1080p), warns if the image is smaller or not 16:9,
+pushes it to `/sdcard/Pictures/` and nudges the media scanner so wallpaper
+pickers list it.
+
 ## Undo everything
 
 ```bash
