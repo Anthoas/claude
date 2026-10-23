@@ -96,6 +96,8 @@ def test_name_helpers():
     assert clean_name("FR| COMÉDIE") == "COMÉDIE" and clean_name("Les 4 | 3 fantastiques") == "Les 4 | 3 fantastiques"
     assert duration_text({"duration": "00:01:20", "duration_secs": 4808}) == "1 h 20"
     assert duration_text({"duration_secs": "3409"}) == "57 min" and duration_text({"duration": "00:56"}) == "00:56"
+    assert duration_text({"duration": "00:01:20", "duration_secs": 80}, movie=True) == "1 h 20"
+    assert duration_text({"duration_secs": 80}) == "1 min"  # un épisode très court reste tel quel
     assert year_of("Le Dîner de cons (1998)") == "1998" and year_of("Sans année") == ""
 
 

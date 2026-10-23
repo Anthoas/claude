@@ -60,14 +60,17 @@ def year_of(*texts: str) -> str:
     return ""
 
 
-def duration_text(info: dict) -> str:
-    """« 1 h 20 » ou « 56 min » d'après duration_secs (le champ « duration » est parfois faux)."""
+def duration_text(info: dict, movie: bool = False) -> str:
+    """« 1 h 20 » ou « 56 min » d'après duration_secs (le champ « duration » est parfois faux).
+    Pour un film, moins de 5 minutes veut dire que le fournisseur a compté en minutes."""
     try:
         seconds = int(info.get("duration_secs") or 0)
     except (TypeError, ValueError):
         seconds = 0
     if seconds <= 0:
         return info.get("duration") or ""
+    if movie and seconds < 300:
+        seconds *= 60
     hours, minutes = divmod(round(seconds / 60), 60)
     return f"{hours} h {minutes:02d}" if hours else f"{minutes} min"
 
@@ -354,7 +357,7 @@ class Catalog:
             "cover": self._image(info.get("cover_big") or info.get("movie_image") or summary.get("stream_icon")),
             "plot": info.get("plot") or info.get("description") or "",
             "genre": info.get("genre") or "", "cast": info.get("cast") or info.get("actors") or "",
-            "director": info.get("director") or "", "duration": duration_text(info),
+            "director": info.get("director") or "", "duration": duration_text(info, movie=True),
             "year": (info.get("releasedate") or "")[:4] or year_of(summary.get("name", "")),
             "rating": summary.get("rating") or info.get("rating") or "",
             "ready": bool(is_ready and vid >= 0 and is_ready(vid)),
