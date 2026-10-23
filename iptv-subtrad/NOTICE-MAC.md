@@ -263,6 +263,29 @@ Exemple : `subtrad regarder "adresse" --decalage -1 --marge 8`
 
 Pour VLC, installe-le d'abord avec `brew install --cask vlc`.
 
+## Plusieurs sources (⚙ Réglages > Sources)
+
+Tu peux garder **plusieurs sources** en même temps : leurs vidéos apparaissent toutes dans la même
+liste, avec le nom de la source sous chaque titre. Dans **⚙ Réglages > Sources > + Ajouter une
+source**, trois façons :
+- **Lien M3U** : colle le lien de la playlist ;
+- **Serveur + identifiant** : tape l'adresse du serveur (ex. `http://monserveur.com:8080`), ton
+  identifiant et ton mot de passe ; le programme en déduit le lien (au format standard
+  `.../get.php?username=…&password=…`). Si ton service utilise un autre format, prends « Lien M3U » ;
+- **Fichier** : choisis un fichier `.m3u` enregistré sur le Mac.
+
+Le nom est facultatif (par défaut : l'adresse du serveur). Une source n'est enregistrée que si sa
+playlist se charge vraiment ; en cas d'erreur (mauvais mot de passe, serveur éteint…) la raison
+s'affiche et rien n'est enregistré. Quand tu as plusieurs sources, un menu **Toutes les sources**
+apparaît à côté de la recherche pour n'en regarder qu'une.
+
+- **Actualiser** (en haut, ou source par source dans les réglages) retélécharge les playlists ;
+  une source en panne n'empêche pas les autres de se mettre à jour.
+- **Supprimer** retire la source ; les vidéos déjà traduites restent gardées.
+- Ton ancienne playlist unique est reprise automatiquement sous le nom « Playlist ».
+- Les identifiants sont gardés sur ce Mac uniquement, dans un fichier que toi seul peux lire, et
+  la page ne les affiche jamais.
+
 ## Dans VLC : la bonne piste de sous-titres
 
 À l'ouverture, VLC affiche **directement la piste « Indonésien (traduit) »** : tu n'as rien à

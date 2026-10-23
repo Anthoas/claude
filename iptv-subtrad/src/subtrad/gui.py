@@ -6,6 +6,7 @@ autre site ouvert dans le navigateur ne puisse piloter le programme.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import secrets
@@ -35,6 +36,7 @@ from .live import Timeline, display_loop, run_live
 from .pipeline import CueSource, NoSubtitles, check_subtitles, open_cue_source
 from .player import MpvPlayer, VlcPlayer
 from .playlist import Channel, fetch_playlist_text, parse_m3u
+from .sources import SLOT_SIZE, Source, build_source
 from .store import VideoStore
 from .subtitles import Cue, load_subtitles, save_subtitles
 from .translate import DEFAULT_MODEL, ClaudeTranslator, TranslationPipeline
@@ -69,13 +71,14 @@ class Settings:
     """Réglages enregistrés sur ce Mac uniquement (le lien M3U contient souvent un mot de
     passe et la clé Claude en est un) : fichier lisible par l'utilisateur seul."""
 
-    DEFAULTS = {"playlist_source": "", "api_key": "", "model": DEFAULT_MODEL,
-                "depuis": "fr", "vers": "id", "lecteur": "vlc", "whisper": "on"}
+    DEFAULTS = {"playlist_source": "", "sources": [], "next_slot": 0, "api_key": "",
+                "model": DEFAULT_MODEL, "depuis": "fr", "vers": "id", "lecteur": "vlc",
+                "whisper": "on"}
     CHOICES = {"lecteur": set(PLAYERS), "whisper": {"on", "off"}, "model": set(MODELS)}
 
     def __init__(self, directory: Path):
         self.path = directory / "config.json"
-        self.data = dict(self.DEFAULTS)
+        self.data = copy.deepcopy(self.DEFAULTS)
         if self.path.exists():
             self.data.update(json.loads(self.path.read_text(encoding="utf-8")))
 
@@ -100,60 +103,87 @@ class Settings:
             "model": self.data["model"], "depuis": self.data["depuis"],
             "vers": self.data["vers"], "has_api_key": bool(self.api_key()),
             "api_key_from_env": not self.data["api_key"] and bool(self.api_key()),
-            "has_playlist_source": bool(self.data["playlist_source"]),
             "models": MODELS, "lecteur": self.data["lecteur"], "players": PLAYERS,
             "whisper": self.data["whisper"],
         }
 
 
 class Library:
-    """La playlist en mémoire, avec un index de recherche."""
+    """Toutes les sources en mémoire, avec un index de recherche.
+
+    Chaque vidéo a un numéro qui ne bouge pas quand on ajoute, retire ou actualise une autre
+    source : `slot * SLOT_SIZE + rang dans la source`. La page peut donc rester ouverte.
+    """
 
     def __init__(self):
         self._lock = threading.Lock()
+        self._parts: dict[int, list[Channel]] = {}
+        self._ids: list[int] = []
         self.channels: list[Channel] = []
         self._haystacks: list[str] = []
+        self._index: dict[int, Channel] = {}
 
-    def load_text(self, text: str) -> int:
-        channels = parse_m3u(text)
-        haystacks = [normalize(f"{c.name} {c.group}") for c in channels]
+    def set_source(self, slot: int, channels: list[Channel]) -> int:
         with self._lock:
-            self.channels, self._haystacks = channels, haystacks
+            self._parts[slot] = channels
+            self._rebuild()
         return len(channels)
 
-    def get(self, index: int) -> Channel:
+    def remove_source(self, slot: int) -> None:
         with self._lock:
-            if not 0 <= index < len(self.channels):
-                raise KeyError(f"Entrée {index} introuvable : recharge la playlist.")
-            return self.channels[index]
+            self._parts.pop(slot, None)
+            self._rebuild()
 
-    def _matching(self, query: str, kind: str, group: str) -> list[int]:
+    def load_text(self, text: str, slot: int = 0, source: str = "") -> int:
+        return self.set_source(slot, parse_m3u(text, source))
+
+    def _rebuild(self) -> None:
+        ids, channels = [], []
+        for slot in sorted(self._parts):
+            for rank, channel in enumerate(self._parts[slot]):
+                ids.append(slot * SLOT_SIZE + rank)
+                channels.append(channel)
+        self._ids, self.channels = ids, channels
+        self._index = dict(zip(ids, channels))
+        self._haystacks = [normalize(f"{c.name} {c.group}") for c in channels]
+
+    def get(self, vid: int) -> Channel:
+        with self._lock:
+            if vid not in self._index:
+                raise KeyError("Vidéo introuvable : la liste a changé, relance la recherche.")
+            return self._index[vid]
+
+    def _matching(self, query: str, kind: str, group: str, source: str = "") -> list[int]:
         words = normalize(query).split()
         return [
-            i for i, (channel, hay) in enumerate(zip(self.channels, self._haystacks))
+            pos for pos, (channel, hay) in enumerate(zip(self.channels, self._haystacks))
             if (not kind or channel.kind == kind)
             and (not group or channel.group == group)
+            and (not source or channel.source == source)
             and all(w in hay for w in words)
         ]
 
-    def search(self, query="", kind="", group="", offset=0, limit=100) -> dict:
+    def search(self, query="", kind="", group="", offset=0, limit=100, source="") -> dict:
         with self._lock:
-            found = self._matching(query, kind, group)
+            found = self._matching(query, kind, group, source)
             items = [
-                {"id": i, "name": self.channels[i].name, "group": self.channels[i].group,
-                 "logo": self.channels[i].logo, "kind": self.channels[i].kind,
-                 "kind_label": KIND_LABELS[self.channels[i].kind]}
-                for i in found[offset : offset + limit]
+                {"id": self._ids[pos], "name": self.channels[pos].name,
+                 "group": self.channels[pos].group, "logo": self.channels[pos].logo,
+                 "kind": self.channels[pos].kind, "source": self.channels[pos].source,
+                 "kind_label": KIND_LABELS[self.channels[pos].kind]}
+                for pos in found[offset : offset + limit]
             ]
         return {"total": len(found), "items": items}
 
-    def groups(self, kind: str = "") -> list[dict]:
+    def groups(self, kind: str = "", source: str = "") -> list[dict]:
         counts: dict[str, int] = {}
         with self._lock:
             for channel in self.channels:
-                if channel.group and (not kind or channel.kind == kind):
+                if (channel.group and (not kind or channel.kind == kind)
+                        and (not source or channel.source == source)):
                     counts[channel.group] = counts.get(channel.group, 0) + 1
-        return [{"name": g, "count": n} for g, n in sorted(counts.items(), key=lambda x: normalize(x[0]))]
+        return [{"name": g, "count": n}
+                for g, n in sorted(counts.items(), key=lambda x: normalize(x[0]))]
 
     def kinds(self) -> dict[str, int]:
         counts = {k: 0 for k in KIND_LABELS}
@@ -212,7 +242,8 @@ class GuiApp:
         store: VideoStore | None = None,
     ):
         self.settings = settings
-        self.playlist_cache = playlist_cache
+        self.playlist_dir = playlist_cache.parent / "playlists"  # une copie par source
+        self.sources: list[Source] = []
         self.library = Library()
         self.jobs: dict[str, Job] = {}
         self._events: dict[str, tuple[threading.Event, threading.Event]] = {}
@@ -225,8 +256,7 @@ class GuiApp:
         self._transcriber = None
         self._transcriber_factory = transcriber_factory or transcribe.make_transcriber
         self.whisper_backend = whisper_backend or transcribe.backend_name
-        if playlist_cache.exists():
-            self.library.load_text(playlist_cache.read_text(encoding="utf-8", errors="replace"))
+        self._load_saved_sources(old_cache=playlist_cache)
 
     @staticmethod
     def _default_translator(settings: Settings) -> ClaudeTranslator:
@@ -245,26 +275,114 @@ class GuiApp:
             self._transcriber = self._transcriber_factory()
         return self._transcriber
 
-    # --- playlist ---
+    # --- sources ---
 
-    def load_playlist(self, source: str = "", text: str = "") -> dict:
-        if source:
-            text = fetch_playlist_text(source.strip())
-        if "#EXTINF" not in text:
-            raise ValueError("Ce n'est pas une playlist M3U (aucune ligne #EXTINF).")
-        count = self.library.load_text(text)
-        self.playlist_cache.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(self.playlist_cache, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    def _cache_file(self, source: Source) -> Path:
+        return self.playlist_dir / f"{source.id}.m3u"
+
+    def _save_sources(self) -> None:
+        self.settings.update(sources=[src.to_dict() for src in self.sources])
+
+    def _write_cache(self, source: Source, text: str) -> None:
+        self.playlist_dir.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self._cache_file(source), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
-        if source:
-            self.settings.update(playlist_source=source.strip())
-        return {"count": count}
 
-    def refresh_playlist(self) -> dict:
-        if not self.settings["playlist_source"]:
-            raise ValueError("Aucun lien enregistré : colle d'abord le lien de la playlist.")
-        return self.load_playlist(source=self.settings["playlist_source"])
+    def _load_saved_sources(self, old_cache: Path) -> None:
+        """Relit les sources enregistrées depuis le disque (sans réseau), et reprend l'ancienne
+        playlist unique des versions précédentes."""
+        self.sources = [Source.from_dict(d) for d in self.settings["sources"]]
+        old_link = self.settings["playlist_source"]
+        if not self.sources and (old_link or old_cache.exists()):
+            kind = "m3u" if old_link else "fichier"
+            migrated = build_source(kind, "Playlist", slot=-1, url=old_link)
+            migrated.slot = self._next_slot()
+            self.sources.append(migrated)
+            if old_cache.exists():
+                text = old_cache.read_text(encoding="utf-8", errors="replace")
+                self._write_cache(migrated, text)
+                migrated.count = len(parse_m3u(text))
+                old_cache.unlink(missing_ok=True)
+            self.settings.update(playlist_source="")
+            self._save_sources()
+        for source in self.sources:
+            path = self._cache_file(source)
+            if path.exists():
+                text = path.read_text(encoding="utf-8", errors="replace")
+                source.count = self.library.set_source(source.slot, parse_m3u(text, source.name))
+
+    def _next_slot(self) -> int:
+        slot = max(self.settings["next_slot"], 1 + max((s.slot for s in self.sources), default=-1))
+        self.settings.update(next_slot=slot + 1)  # un numéro n'est jamais réutilisé
+        return slot
+
+    def public_sources(self) -> list[dict]:
+        return [src.public() for src in self.sources]
+
+    def _find_source(self, source_id: str) -> Source:
+        for source in self.sources:
+            if source.id == source_id:
+                return source
+        raise KeyError("Source introuvable.")
+
+    def _load_source(self, source: Source, text: str | None = None) -> int:
+        """Télécharge (ou reçoit) la playlist d'une source, la garde sur le disque et l'indexe."""
+        if text is None:
+            text = fetch_playlist_text(source.playlist_url())
+        if "#EXTINF" not in text:
+            raise ValueError("Ce n'est pas une playlist M3U (aucune ligne #EXTINF) : vérifie "
+                             "l'adresse, l'identifiant et le mot de passe.")
+        self._write_cache(source, text)
+        source.count = self.library.set_source(source.slot, parse_m3u(text, source.name))
+        source.updated_at, source.error = time.time(), ""
+        return source.count
+
+    def add_source(self, kind: str, name: str = "", url: str = "", server: str = "",
+                   username: str = "", password: str = "", text: str = "") -> dict:
+        """Ajoute une source ; elle n'est enregistrée que si sa playlist se charge."""
+        source = build_source(kind, name, slot=-1, url=url, server=server,
+                              username=username, password=password)  # valide la saisie
+        if kind == "fichier" and not text.strip():
+            raise ValueError("Le fichier est vide.")
+        taken = {src.name.casefold() for src in self.sources}
+        base, n = source.name, 2
+        while source.name.casefold() in taken:  # deux sources ne portent jamais le même nom
+            source.name, n = f"{base} ({n})", n + 1
+        source.slot = self._next_slot()
+        self._load_source(source, text or None)  # lève une erreur si ça ne marche pas
+        self.sources.append(source)
+        self._save_sources()
+        return source.public()
+
+    def remove_source(self, source_id: str) -> dict:
+        source = self._find_source(source_id)
+        self.sources.remove(source)
+        self.library.remove_source(source.slot)
+        self._cache_file(source).unlink(missing_ok=True)
+        self._save_sources()
+        return {"removed": source_id}
+
+    def refresh_sources(self, source_id: str = "") -> list[dict]:
+        """Retélécharge une source (ou toutes) ; une source en panne n'arrête pas les autres."""
+        targets = [self._find_source(source_id)] if source_id else list(self.sources)
+        for source in targets:
+            if not source.refreshable:
+                continue
+            try:
+                self._load_source(source)
+            except Exception as exc:
+                source.error = friendly_error(exc)
+        self._save_sources()
+        return self.public_sources()
+
+    def load_playlist(self, source: str = "", text: str = "") -> dict:
+        """Ajoute une playlist (lien ou texte) : conservé pour la compatibilité."""
+        if source:
+            added = self.add_source("m3u", "Playlist", url=source)
+        else:
+            added = self.add_source("fichier", "Playlist", text=text)
+        return {"count": added["count"]}
 
     # --- mémoire par vidéo ---
 
@@ -274,8 +392,8 @@ class GuiApp:
     def is_ready(self, channel: Channel) -> bool:
         return self.store.translation_file(*self._store_args(channel)) is not None
 
-    def search(self, query="", kind="", group="", offset=0, limit=100) -> dict:
-        result = self.library.search(query, kind, group, offset, limit)
+    def search(self, query="", kind="", group="", offset=0, limit=100, source="") -> dict:
+        result = self.library.search(query, kind, group, offset, limit, source)
         for item in result["items"]:
             item["ready"] = self.is_ready(self.library.get(item["id"]))
         return result
@@ -551,19 +669,27 @@ class _Handler(BaseHTTPRequestHandler):
             if (method, path) == ("GET", "/api/state"):
                 return self._json({**app.settings.public(), "count": len(app.library.channels),
                                    "whisper_backend": app.whisper_backend(),
+                                   "sources": app.public_sources(),
                                    "kinds": app.library.kinds()})
             if (method, path) == ("GET", "/api/search"):
                 return self._json(app.search(
                     params.get("q", ""), params.get("kind", ""), params.get("group", ""),
-                    int(params.get("offset", 0)), min(int(params.get("limit", 100)), 500)))
+                    int(params.get("offset", 0)), min(int(params.get("limit", 100)), 500),
+                    params.get("source", "")))
             if (method, path) == ("GET", "/api/groups"):
-                return self._json(app.library.groups(params.get("kind", "")))
+                return self._json(app.library.groups(params.get("kind", ""),
+                                                     params.get("source", "")))
             if (method, path) == ("GET", "/api/jobs"):
                 return self._json([job_public(j) for j in reversed(list(app.jobs.values()))])
-            if (method, path) == ("POST", "/api/playlist"):
-                return self._json(app.load_playlist(params.get("source", ""), params.get("text", "")))
-            if (method, path) == ("POST", "/api/playlist/refresh"):
-                return self._json(app.refresh_playlist())
+            if (method, path) == ("GET", "/api/sources"):
+                return self._json(app.public_sources())
+            if (method, path) == ("POST", "/api/sources"):
+                fields = ("kind", "name", "url", "server", "username", "password", "text")
+                return self._json(app.add_source(**{k: str(params.get(k, "")) for k in fields}))
+            if (method, path) == ("POST", "/api/sources/delete"):
+                return self._json(app.remove_source(str(params["id"])))
+            if (method, path) == ("POST", "/api/sources/refresh"):
+                return self._json(app.refresh_sources(str(params.get("id", ""))))
             if (method, path) == ("POST", "/api/settings"):
                 values = {k: str(params[k]) for k in
                           ("model", "depuis", "vers", "api_key", "lecteur", "whisper") if k in params}
@@ -608,7 +734,7 @@ def open_in_chrome(url: str) -> None:
 
 def run_gui(port: int = 8765, open_browser: bool = True) -> int:
     settings = Settings(config_dir())
-    app = GuiApp(settings, default_cache_path().parent / "playlist.m3u")
+    app = GuiApp(settings, default_cache_path().parent / "playlist.m3u")  # (ancien fichier, migré)
     server, _ = make_server(app, port)
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(f"Interface ouverte sur {url}")

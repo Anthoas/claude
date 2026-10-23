@@ -59,6 +59,17 @@
   .logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
   .name { font-weight: 600; overflow-wrap: anywhere; }
   .meta { color: var(--muted); font-size: 13px; }
+  .source-row { display: flex; gap: 10px; align-items: center; justify-content: space-between;
+                background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+                padding: 8px 10px; margin: 6px 0; }
+  .source-row .name { font-weight: 600; }
+  .source-row .meta { font-size: 12px; }
+  .source-row .buttons { margin: 0; display: flex; gap: 6px; flex-shrink: 0; }
+  .source-row button { padding: 4px 9px; font-size: 13px; }
+  #source-kind { margin-top: 12px; width: 100%; }
+  #source-kind button { flex: 1; }
+  .field-group { display: grid; gap: 0; }
+  .badge.source { color: var(--muted); }
   .badge.ready { color: var(--ok); border-color: var(--ok); }
   .badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px;
            border: 1px solid var(--line); margin-right: 6px; color: var(--text); }
@@ -113,16 +124,11 @@
 
 <main>
   <section id="setup" class="card hidden">
-    <h2>Pour commencer : ta playlist</h2>
-    <p class="muted">Colle le lien M3U fourni par ton service, ou choisis un fichier .m3u enregistré sur ce Mac.
-      Il reste enregistré sur ce Mac uniquement.</p>
-    <div class="row">
-      <input id="source" type="text" placeholder="https://…/playlist.m3u" autocomplete="off" spellcheck="false">
-      <button id="load" class="primary">Charger</button>
-    </div>
-    <div class="row">
-      <label class="muted">ou un fichier : <input id="file" type="file" accept=".m3u,.m3u8,text/plain"></label>
-    </div>
+    <h2>Pour commencer : ajoute une source</h2>
+    <p class="muted">Une source, c'est ton service de vidéos : un <b>lien M3U</b>, un <b>fichier M3U</b>,
+      ou l'<b>adresse du serveur avec ton identifiant et ton mot de passe</b>. Tu pourras en ajouter
+      d'autres plus tard dans ⚙ Réglages. Tout reste enregistré sur ce Mac uniquement.</p>
+    <div class="row"><button id="setup-add" class="primary">+ Ajouter une source</button></div>
     <p id="setup-msg" class="muted"></p>
   </section>
 
@@ -131,12 +137,13 @@
       <input id="q" type="search" placeholder="Rechercher une chaîne, un film, une série…" autocomplete="off">
     </div>
     <div class="toolbar">
-      <div class="tabs" role="group" aria-label="Type">
+      <div class="tabs" id="kind-tabs" role="group" aria-label="Type">
         <button data-kind="" aria-pressed="true">Tout</button>
         <button data-kind="direct" aria-pressed="false">Direct</button>
         <button data-kind="film" aria-pressed="false">Films</button>
         <button data-kind="serie" aria-pressed="false">Séries</button>
       </div>
+      <select id="source-filter" class="hidden" aria-label="Source"><option value="">Toutes les sources</option></select>
       <select id="group" aria-label="Catégorie"><option value="">Toutes les catégories</option></select>
     </div>
     <p id="count" class="muted"></p>
@@ -146,6 +153,39 @@
 </main>
 
 <div id="jobs" aria-live="polite"></div>
+
+<dialog id="source-dialog">
+  <h2>Ajouter une source</h2>
+  <div class="tabs" id="source-kind" role="group" aria-label="Type de source">
+    <button type="button" data-kind="m3u" aria-pressed="true">Lien M3U</button>
+    <button type="button" data-kind="xtream" aria-pressed="false">Serveur + identifiant</button>
+    <button type="button" data-kind="fichier" aria-pressed="false">Fichier</button>
+  </div>
+  <label for="src-name">Nom (facultatif)</label>
+  <input id="src-name" type="text" placeholder="Ex. : Maison" autocomplete="off">
+  <div class="field-group" data-for="m3u">
+    <label for="src-url">Lien de la playlist</label>
+    <input id="src-url" type="text" placeholder="https://…/playlist.m3u" autocomplete="off" spellcheck="false">
+  </div>
+  <div class="field-group hidden" data-for="xtream">
+    <label for="src-server">Adresse du serveur</label>
+    <input id="src-server" type="text" placeholder="http://monserveur.com:8080" autocomplete="off" spellcheck="false">
+    <label for="src-user">Identifiant</label>
+    <input id="src-user" type="text" autocomplete="off" spellcheck="false">
+    <label for="src-pass">Mot de passe</label>
+    <input id="src-pass" type="password" autocomplete="off">
+    <div class="hint">Le programme en déduit le lien de la playlist. Identifiant et mot de passe restent sur ce Mac.</div>
+  </div>
+  <div class="field-group hidden" data-for="fichier">
+    <label for="src-file">Fichier .m3u</label>
+    <input id="src-file" type="file" accept=".m3u,.m3u8,text/plain">
+  </div>
+  <p id="src-msg" class="muted"></p>
+  <div class="buttons">
+    <button id="src-cancel" type="button">Annuler</button>
+    <button id="src-add" class="primary" type="button">Ajouter</button>
+  </div>
+</dialog>
 
 <dialog id="settings">
   <h2>Réglages</h2>
@@ -172,8 +212,9 @@
     <option value="off">Ne rien faire</option>
   </select>
   <div id="whisper-hint" class="hint"></div>
-  <label>Playlist</label>
-  <button id="change-playlist" type="button">Changer de playlist…</button>
+  <label>Sources</label>
+  <div id="source-list"></div>
+  <button id="add-source" type="button">+ Ajouter une source…</button>
   <div class="buttons">
     <button id="cancel-settings" type="button">Annuler</button>
     <button id="save-settings" class="primary" type="button">Enregistrer</button>
@@ -184,7 +225,7 @@
 "use strict";
 const TOKEN = "__TOKEN__";
 const PAGE = 100;
-const state = { q: "", kind: "", group: "", offset: 0, total: 0, settings: null };
+const state = { q: "", kind: "", group: "", source: "", offset: 0, total: 0, settings: null };
 const $ = (sel) => document.querySelector(sel);
 
 async function api(path, body) {
@@ -214,7 +255,7 @@ const fmt = (n) => n.toLocaleString("fr-FR");
 async function init() {
   const s = await api("/api/state");
   state.settings = s;
-  if (!s.count) {
+  if (!s.sources.length) {
     showSetup();
   } else {
     showBrowse(s);
@@ -228,14 +269,20 @@ function showSetup(message = "") {
   $("#browse").classList.add("hidden");
   $("#refresh").classList.add("hidden");
   $("#setup-msg").textContent = message;
-  $("#source").focus();
 }
 
 async function showBrowse(s) {
   $("#setup").classList.add("hidden");
   $("#browse").classList.remove("hidden");
-  $("#refresh").classList.toggle("hidden", !s.has_playlist_source);
-  for (const btn of document.querySelectorAll(".tabs button")) {
+  $("#refresh").classList.toggle("hidden", !s.sources.some((x) => x.refreshable));
+  const multiple = s.sources.length > 1;
+  const filter = $("#source-filter");
+  filter.classList.toggle("hidden", !multiple);
+  filter.replaceChildren(el("option", { value: "", textContent: "Toutes les sources" }),
+    ...s.sources.map((x) => el("option", { value: x.name, textContent: `${x.name} (${fmt(x.count)})` })));
+  if (s.sources.some((x) => x.name === state.source)) filter.value = state.source;
+  else state.source = "";
+  for (const btn of document.querySelectorAll("#kind-tabs button")) {
     const n = btn.dataset.kind ? s.kinds[btn.dataset.kind] : s.count;
     btn.textContent = `${btn.textContent.split(" (")[0]} (${fmt(n)})`;
     btn.disabled = !n;
@@ -245,41 +292,26 @@ async function showBrowse(s) {
   $("#q").focus();
 }
 
-async function loadPlaylist(body, label) {
-  const msg = $("#setup-msg");
-  msg.className = "muted";
-  msg.replaceChildren(el("span", { className: "spinner" }), `Chargement de ${label}… (une grosse playlist peut prendre une minute)`);
-  $("#load").disabled = true;
-  try {
-    const r = await api("/api/playlist", body);
-    msg.textContent = `${fmt(r.count)} entrées chargées.`;
-    const s = await api("/api/state");
-    state.settings = s;
-    await showBrowse(s);
-  } catch (e) {
-    msg.className = "error";
-    msg.textContent = e.message;
-  } finally {
-    $("#load").disabled = false;
-  }
+async function reloadState() {
+  state.settings = await api("/api/state");
+  return state.settings;
 }
 
-$("#load").addEventListener("click", () => {
-  const source = $("#source").value.trim();
-  if (source) loadPlaylist({ source }, "la playlist");
-});
-$("#source").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#load").click(); });
-$("#file").addEventListener("change", async () => {
-  const file = $("#file").files[0];
-  if (file) loadPlaylist({ text: await file.text() }, file.name);
+$("#setup-add").addEventListener("click", openSourceDialog);
+$("#source-filter").addEventListener("change", async () => {
+  state.source = $("#source-filter").value;
+  await loadGroups();
+  search();
 });
 $("#refresh").addEventListener("click", async () => {
   const btn = $("#refresh");
   btn.disabled = true;
   btn.textContent = "↻ Actualisation…";
   try {
-    await api("/api/playlist/refresh", {});
-    await showBrowse(await api("/api/state"));
+    const sources = await api("/api/sources/refresh", {});
+    const failed = sources.filter((x) => x.error);
+    await showBrowse(await reloadState());
+    if (failed.length) alert(failed.map((x) => `${x.name} : ${x.error}`).join("\n"));
   } catch (e) {
     alert(e.message);
   } finally {
@@ -288,10 +320,99 @@ $("#refresh").addEventListener("click", async () => {
   }
 });
 
+// --- Sources : ajout, actualisation, suppression ---------------------------------
+
+let sourceKind = "m3u";
+
+function setSourceKind(kind) {
+  sourceKind = kind;
+  for (const b of document.querySelectorAll("#source-kind button")) b.setAttribute("aria-pressed", b.dataset.kind === kind);
+  for (const group of document.querySelectorAll("#source-dialog [data-for]")) {
+    group.classList.toggle("hidden", group.dataset.for !== kind);
+  }
+  $("#src-msg").textContent = "";
+}
+for (const b of document.querySelectorAll("#source-kind button")) b.addEventListener("click", () => setSourceKind(b.dataset.kind));
+
+function openSourceDialog() {
+  for (const id of ["src-name", "src-url", "src-server", "src-user", "src-pass", "src-file"]) $(`#${id}`).value = "";
+  setSourceKind("m3u");
+  $("#src-add").disabled = false;
+  $("#source-dialog").showModal();
+  $("#src-url").focus();
+}
+$("#add-source").addEventListener("click", openSourceDialog);
+$("#src-cancel").addEventListener("click", () => $("#source-dialog").close());
+
+$("#src-add").addEventListener("click", async () => {
+  const msg = $("#src-msg");
+  const body = { kind: sourceKind, name: $("#src-name").value.trim() };
+  if (sourceKind === "m3u") body.url = $("#src-url").value.trim();
+  if (sourceKind === "xtream") {
+    body.server = $("#src-server").value.trim();
+    body.username = $("#src-user").value.trim();
+    body.password = $("#src-pass").value;
+  }
+  if (sourceKind === "fichier") {
+    const file = $("#src-file").files[0];
+    if (!file) { msg.className = "error"; msg.textContent = "Choisis un fichier."; return; }
+    body.text = await file.text();
+    if (!body.name) body.name = file.name.replace(/\.[^.]+$/, "");
+  }
+  msg.className = "muted";
+  msg.replaceChildren(el("span", { className: "spinner" }), "Chargement… (une grosse playlist peut prendre une minute)");
+  $("#src-add").disabled = true;
+  try {
+    const added = await api("/api/sources", body);
+    $("#source-dialog").close();
+    await showBrowse(await reloadState());
+    renderSourceList();
+    $("#count").textContent = `${fmt(added.count)} entrées ajoutées depuis « ${added.name} ».`;
+  } catch (e) {
+    msg.className = "error";
+    msg.textContent = e.message;
+  } finally {
+    $("#src-add").disabled = false;
+  }
+});
+
+function renderSourceList() {
+  const sources = state.settings.sources;
+  $("#source-list").replaceChildren(...(sources.length ? sources.map((src) => {
+    const when = src.updated_at ? ` · actualisée le ${new Date(src.updated_at * 1000).toLocaleString("fr-FR")}` : "";
+    const meta = el("div", { className: "meta muted", textContent: `${src.kind_label} · ${src.host} · ${fmt(src.count)} entrées${when}` });
+    const info = el("div", {}, el("div", { className: "name", textContent: src.name }), meta);
+    if (src.error) info.append(el("div", { className: "meta error", textContent: `Dernière actualisation échouée : ${src.error}` }));
+    const buttons = el("div", { className: "buttons" });
+    if (src.refreshable) {
+      const refresh = el("button", { type: "button", textContent: "Actualiser" });
+      refresh.addEventListener("click", async () => {
+        refresh.disabled = true; refresh.textContent = "…";
+        try { await api("/api/sources/refresh", { id: src.id }); await showBrowse(await reloadState()); }
+        catch (e) { alert(e.message); }
+        renderSourceList();
+      });
+      buttons.append(refresh);
+    }
+    const remove = el("button", { type: "button", textContent: "Supprimer" });
+    remove.addEventListener("click", async () => {
+      if (!confirm(`Supprimer la source « ${src.name} » ? Les vidéos déjà traduites restent gardées.`)) return;
+      try {
+        await api("/api/sources/delete", { id: src.id });
+        const s = await reloadState();
+        if (!s.sources.length) { $("#settings").close(); showSetup(); } else { await showBrowse(s); }
+      } catch (e) { alert(e.message); }
+      renderSourceList();
+    });
+    buttons.append(remove);
+    return el("div", { className: "source-row" }, info, buttons);
+  }) : [el("div", { className: "muted", textContent: "Aucune source." })]));
+}
+
 // --- Recherche ---------------------------------------------------------------
 
 async function loadGroups() {
-  const groups = await api(`/api/groups?kind=${encodeURIComponent(state.kind)}`);
+  const groups = await api(`/api/groups?kind=${encodeURIComponent(state.kind)}&source=${encodeURIComponent(state.source)}`);
   const select = $("#group");
   select.replaceChildren(el("option", { value: "", textContent: "Toutes les catégories" }),
     ...groups.map((g) => el("option", { value: g.name, textContent: `${g.name} (${fmt(g.count)})` })));
@@ -304,7 +425,7 @@ async function search(append = false) {
   const seq = ++searchSeq;
   if (!append) state.offset = 0;
   const params = new URLSearchParams({ q: state.q, kind: state.kind, group: state.group,
-                                       offset: state.offset, limit: PAGE });
+                                       source: state.source, offset: state.offset, limit: PAGE });
   const r = await api(`/api/search?${params}`);
   if (seq !== searchSeq) return; // une frappe plus récente a déjà relancé la recherche
   state.total = r.total;
@@ -354,7 +475,9 @@ function renderItem(item) {
     logo,
     el("div", {},
       el("div", { className: "name", textContent: item.name }),
-      el("div", { className: "meta" }, el("span", { className: "badge", textContent: item.kind_label }), badge, item.group),
+      el("div", { className: "meta" }, el("span", { className: "badge", textContent: item.kind_label }), badge,
+         state.settings.sources.length > 1 ? el("span", { className: "badge source", textContent: item.source }) : null,
+         item.group),
       status),
     el("div", { className: "actions" }, redo, check, watch));
 }
@@ -404,9 +527,9 @@ $("#q").addEventListener("input", () => {
   clearTimeout(debounce);
   debounce = setTimeout(() => { state.q = $("#q").value; search(); }, 150);
 });
-for (const btn of document.querySelectorAll(".tabs button")) {
+for (const btn of document.querySelectorAll("#kind-tabs button")) {
   btn.addEventListener("click", async () => {
-    for (const b of document.querySelectorAll(".tabs button")) b.setAttribute("aria-pressed", b === btn);
+    for (const b of document.querySelectorAll("#kind-tabs button")) b.setAttribute("aria-pressed", b === btn);
     state.kind = btn.dataset.kind;
     await loadGroups();
     search();
@@ -504,6 +627,7 @@ function openSettings() {
     : "Whisper n'est pas installé : dans le Terminal, tape « brew install whisper-cpp » puis relance subtrad gui.";
   $("#depuis").value = s.depuis;
   $("#vers").value = s.vers;
+  renderSourceList();
   $("#api-key").value = "";
   $("#api-key-hint").textContent = s.has_api_key
     ? (s.api_key_from_env ? "Clé trouvée dans la configuration du Terminal. Laisse vide pour la garder."
@@ -526,7 +650,6 @@ $("#save-settings").addEventListener("click", async () => {
     alert(e.message);
   }
 });
-$("#change-playlist").addEventListener("click", () => { $("#settings").close(); showSetup(); });
 
 init().catch((e) => showSetup(`Impossible de joindre le programme : ${e.message}`));
 </script>

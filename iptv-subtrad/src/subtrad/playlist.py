@@ -18,6 +18,7 @@ class Channel:
     name: str
     url: str
     attrs: dict[str, str] = field(default_factory=dict)
+    source: str = ""  # nom de la source (playlist) d'où vient cette entrée
 
     @property
     def group(self) -> str:
@@ -50,7 +51,7 @@ def _split_extinf(line: str) -> tuple[str, str]:
     return line, ""
 
 
-def parse_m3u(text: str) -> list[Channel]:
+def parse_m3u(text: str, source: str = "") -> list[Channel]:
     """Transforme le texte d'une playlist en liste de chaînes.
 
     Tolère les lignes vides, les commentaires et l'absence d'en-tête #EXTM3U.
@@ -71,7 +72,7 @@ def parse_m3u(text: str) -> list[Channel]:
             continue
         else:
             name, attrs = pending if pending else (line, {})
-            channels.append(Channel(name=name or line, url=line, attrs=attrs))
+            channels.append(Channel(name=name or line, url=line, attrs=attrs, source=source))
             pending = None
 
     return channels

@@ -130,12 +130,13 @@ def test_page_is_served_with_token_and_api_requires_it(server):
 def test_full_flow_load_search_check_watch(server):
     base, session, app, tmp_path = server
     assert session.get(base + "/api/state").json()["count"] == 0
-    bad = session.post(base + "/api/playlist", json={"text": "pas une playlist"})
+    bad = session.post(base + "/api/sources", json={"kind": "fichier", "text": "pas une playlist"})
     assert bad.status_code == 400 and "M3U" in bad.json()["error"]
 
-    assert session.post(base + "/api/playlist", json={"text": PLAYLIST}).json() == {"count": 4}
-    cached = tmp_path / "cache" / "playlist.m3u"
-    assert cached.exists() and stat.S_IMODE(cached.stat().st_mode) == 0o600
+    added = session.post(base + "/api/sources", json={"kind": "fichier", "name": "Test", "text": PLAYLIST})
+    assert added.json()["count"] == 4
+    (cached,) = (tmp_path / "cache" / "playlists").glob("*.m3u")
+    assert stat.S_IMODE(cached.stat().st_mode) == 0o600
 
     found = session.get(base + "/api/search", params={"q": "dîner"}).json()
     assert found["total"] == 1
@@ -160,7 +161,7 @@ def test_full_flow_load_search_check_watch(server):
 
 def test_watch_error_is_reported(server):
     base, session, _, _ = server
-    session.post(base + "/api/playlist", json={"text": PLAYLIST})
+    session.post(base + "/api/sources", json={"kind": "fichier", "text": PLAYLIST})
     # « Télé Matin » est un .ts inconnu du faux réseau : l'erreur doit remonter dans la page.
     tele = session.get(base + "/api/search", params={"q": "matin"}).json()["items"][0]["id"]
     session.post(base + "/api/watch", json={"id": tele})
@@ -188,7 +189,7 @@ def test_check_reports_missing_language(monkeypatch):
 
 def test_errors_never_leak_stream_urls(server):
     base, session, _, _ = server
-    session.post(base + "/api/playlist", json={"text": PLAYLIST})
+    session.post(base + "/api/sources", json={"kind": "fichier", "text": PLAYLIST})
     secret_url = "http://iptv.example/series/MONUSER/MONMDP/1.mp4"
 
     import requests as rq
