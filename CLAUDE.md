@@ -42,6 +42,11 @@ est un **lecteur** piloté à la télécommande (Kotlin, Compose for TV, Media3/
    sous-titres indonésiens affichés d'office au bon moment. **Pas encore testé** : « Préparer »
    depuis la télé (traduction lancée par la télé), recherche saisie au clavier de la télé.
 
+4. ✅ Catalogue Xtream Codes (octobre 2026) : le lien de la playlist est un `get.php?username=…`,
+   le même compte ouvre `player_api.php` (`subtrad/xtream.py`). Sur la télé : grilles d'affiches
+   par catégorie (Séries, Films), fiche de série avec saisons et épisodes, fiche de film. Testé sur
+   la télé. L'abonnement n'autorise **qu'une connexion vidéo à la fois** (`max_connections: 1`).
+
 Piloter la télé par adb (`input keyevent`) : **vérifier d'abord que Subtrad TV est au premier
 plan** (`dumpsys activity activities | grep mResumedActivity`). La famille utilise la télé (appli
 ZenIPTV) : une touche envoyée à l'aveugle est arrivée une fois dans la vidéo de quelqu'un.

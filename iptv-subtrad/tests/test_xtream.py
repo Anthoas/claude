@@ -12,7 +12,8 @@ from subtrad.playlist import parse_m3u
 from subtrad.store import VideoStore
 from subtrad.subtitles import Cue
 from subtrad.tele import TvAccess
-from subtrad.xtream import Catalog, XtreamAccount, clean_name, duration_text, language_of, year_of
+from subtrad.xtream import (Catalog, XtreamAccount, clean_name, duration_text, language_of, rating_text,
+                            year_of)
 
 SOURCE = "http://portal.example:8080/get.php?username=MONUSER&password=MONMDP&type=m3u_plus"
 STREAM = "http://stream.example:80"
@@ -39,12 +40,13 @@ LISTS = {
         {"series_id": 79, "name": "|FR| Sense8 2015 FHD MULTI", "category_id": "10",
          "cover": f"{STREAM}/images/MONUSER/s8.jpg"},
     ],
-    "get_vod_categories": [{"category_id": "20", "category_name": "FR| COMÉDIE", "parent_id": 0}],
+    "get_vod_categories": [{"category_id": "20", "category_name": "FR| COMÉDIE", "parent_id": 0},
+                           {"category_id": "21", "category_name": "SD| NOUVEAUTÉS", "parent_id": 0}],
     "get_vod_streams": [
         {"stream_id": 501, "name": "|FR| Le Dîner de cons (1998)", "category_id": "20",
          "stream_icon": "https://image.tmdb.org/t/p/w600/diner.jpg", "rating": 7.4,
          "container_extension": "mkv"},
-        {"stream_id": 502, "name": "|FR| Absent de la playlist - 2022", "category_id": "20",
+        {"stream_id": 502, "name": "|FR| Absent de la playlist - 2022", "category_id": "21",
          "stream_icon": "", "container_extension": "mp4"},
     ],
 }
@@ -98,6 +100,7 @@ def test_name_helpers():
     assert duration_text({"duration_secs": "3409"}) == "57 min" and duration_text({"duration": "00:56"}) == "00:56"
     assert duration_text({"duration": "00:01:20", "duration_secs": 80}, movie=True) == "1 h 20"
     assert duration_text({"duration_secs": 80}) == "1 min"  # un épisode très court reste tel quel
+    assert (rating_text(7.373), rating_text("8"), rating_text("0"), rating_text(None)) == ("7.4", "8", "", "")
     assert year_of("Le Dîner de cons (1998)") == "1998" and year_of("Sans année") == ""
 
 
@@ -139,6 +142,7 @@ def test_movies_are_linked_to_the_playlist(tmp_path):
     page = catalog.movies(is_ready=lambda vid: vid == 3)
     assert [(m["name"], m["id"], m["ready"], m["year"]) for m in page["items"]] == [
         ("Le Dîner de cons (1998)", 3, True, "1998"), ("Absent de la playlist - 2022", -1, False, "2022")]
+    assert page["items"][0]["rating"] == "7.4"
     detail = catalog.movie_detail(501)
     assert detail["id"] == 3 and detail["duration"] == "1 h 20" and detail["year"] == "1998"
 
@@ -210,7 +214,7 @@ def test_tv_catalog_endpoints(tele):
     app.settings.update(playlist_source=SOURCE)
     assert session.get(base + "/tele/api/catalog").json() == {"available": True}
     cats = session.get(base + "/tele/api/catalog/categories", params={"type": "movie"}).json()
-    assert cats == [{"id": "20", "name": "COMÉDIE", "count": 2}]
+    assert cats == [{"id": "20", "name": "COMÉDIE", "count": 1}, {"id": "21", "name": "SD| NOUVEAUTÉS", "count": 1}]
     series = session.get(base + "/tele/api/catalog/series", params={"q": "thrones"}).json()
     assert series["items"][0]["series_id"] == 77
 

@@ -75,6 +75,15 @@ def duration_text(info: dict, movie: bool = False) -> str:
     return f"{hours} h {minutes:02d}" if hours else f"{minutes} min"
 
 
+def rating_text(value) -> str:
+    """« 7.373 » → « 7.4 », « 8 » → « 8 », 0 ou vide → « »."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return ""
+    return f"{number:.1f}".rstrip("0").rstrip(".") if number > 0 else ""
+
+
 def _first(value) -> str:
     """Une adresse, ou la première d'une liste (backdrop_path est parfois une liste)."""
     if isinstance(value, list):
@@ -254,7 +263,11 @@ class Catalog:
                 cat = str(item.get("category_id"))
                 counts[cat] = counts.get(cat, 0) + 1
         cats = data["series_categories"] if kind == "series" else data["vod_categories"]
-        return [{"id": str(c["category_id"]), "name": clean_name(c.get("category_name", "")),
+        # « FR| COMÉDIE » → « COMÉDIE » ; « SD| NOUVEAUTÉS » garde son préfixe (qualité, pas langue).
+        def label(name: str) -> str:
+            return clean_name(name) if lang and language_of(name) == lang else name.strip()
+
+        return [{"id": str(c["category_id"]), "name": label(c.get("category_name", "")),
                  "count": counts[str(c["category_id"])]}
                 for c in cats if counts.get(str(c["category_id"]))]
 
@@ -275,7 +288,7 @@ class Catalog:
             "series_id": s.get("series_id"), "name": clean_name(s.get("name", "")),
             "cover": self._image(s.get("cover")),
             "year": (s.get("releaseDate") or "")[:4] or year_of(s.get("name", "")),
-            "rating": s.get("rating") or "", "genre": s.get("genre") or "",
+            "rating": rating_text(s.get("rating")), "genre": s.get("genre") or "",
         } for s in page]}
 
     def movies(self, category: str = "", query: str = "", lang: str = "FR",
@@ -288,7 +301,7 @@ class Catalog:
             items.append({
                 "vod_id": v.get("stream_id"), "id": vid, "name": clean_name(v.get("name", "")),
                 "cover": self._image(v.get("stream_icon")), "year": year_of(v.get("name", "")),
-                "rating": v.get("rating") or "",
+                "rating": rating_text(v.get("rating")),
                 "ready": bool(is_ready and vid >= 0 and is_ready(vid)),
             })
         return {"total": len(found), "items": items}
@@ -324,7 +337,7 @@ class Catalog:
                     "id": vid, "episode": int(e.get("episode_num") or 0),
                     "title": clean_name(e.get("title") or ""),
                     "duration": duration_text(einfo), "air_date": einfo.get("air_date") or "",
-                    "rating": einfo.get("rating") or "", "image": self._image(einfo.get("movie_image")),
+                    "rating": rating_text(einfo.get("rating")), "image": self._image(einfo.get("movie_image")),
                     "plot": einfo.get("plot") or "",
                     "ready": bool(is_ready and vid >= 0 and is_ready(vid)),
                 })
@@ -339,7 +352,7 @@ class Catalog:
             "cast": about.get("cast") or summary.get("cast") or "",
             "director": about.get("director") or summary.get("director") or "",
             "year": (about.get("releaseDate") or summary.get("releaseDate") or "")[:4],
-            "rating": about.get("rating") or summary.get("rating") or "",
+            "rating": rating_text(about.get("rating") or summary.get("rating")),
             "seasons": seasons,
         }
 
@@ -359,6 +372,6 @@ class Catalog:
             "genre": info.get("genre") or "", "cast": info.get("cast") or info.get("actors") or "",
             "director": info.get("director") or "", "duration": duration_text(info, movie=True),
             "year": (info.get("releasedate") or "")[:4] or year_of(summary.get("name", "")),
-            "rating": summary.get("rating") or info.get("rating") or "",
+            "rating": rating_text(summary.get("rating") or info.get("rating")),
             "ready": bool(is_ready and vid >= 0 and is_ready(vid)),
         }
