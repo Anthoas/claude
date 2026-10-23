@@ -15,7 +15,7 @@
     <string name="search_button">Cari</string>
     <string name="settings_button">Pengaturan</string>
     <string name="load_more">Muat lebih banyak</string>
-    <string name="results_count">%1$d hasil</string>
+    <string name="results_count">Hasil: %1$d</string>
     <string name="nothing_ready">Belum ada video yang siap. Cari film atau serial, lalu pilih \"Siapkan\".</string>
     <string name="no_results">Tidak ada hasil.</string>
     <string name="badge_ready">✓ Siap</string>

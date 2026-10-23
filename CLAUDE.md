@@ -35,11 +35,16 @@ est un **lecteur** piloté à la télécommande (Kotlin, Compose for TV, Media3/
    accès sur le Wi-Fi de la maison seulement, code à 6 chiffres (en-tête `X-Subtrad-Code`),
    activé dans ⚙ Réglages. Testé depuis le Mac ; la télé « ping » le Mac. L'appel HTTP depuis la
    télé sera testé par l'application. Playlist réelle : ~507 000 entrées (`/tele/api/ready` ≈ 2 s).
-2. ✅ Écrite dans `tv-app/` (voir `tv-app/README.md`), **jamais compilée** à ce stade : attendre
-   des erreurs de compilation à corriger à l'étape 3. Liste, recherche, préparation, lecture avec la
-   piste « Indonésien (traduit) » sélectionnée d'office, navigation au clavier directionnel.
-3. Compiler sur le Mac (JDK 17 + outils en ligne de commande Android, pas besoin d'Android Studio),
-   installer par `adb install`, tester sur la vraie télé, corriger.
+2. ✅ Écrite dans `tv-app/` (voir `tv-app/README.md`) : liste, recherche, préparation, lecture
+   avec la piste « Indonésien (traduit) » sélectionnée d'office, navigation au clavier directionnel.
+3. ✅ Compilée sur le Mac et installée sur la télé (octobre 2026). **Testé sur la vraie télé** :
+   connexion au Mac avec le code, liste « prêtes », fiche, lecture d'un épisode 4K avec les
+   sous-titres indonésiens affichés d'office au bon moment. **Pas encore testé** : « Préparer »
+   depuis la télé (traduction lancée par la télé), recherche saisie au clavier de la télé.
+
+Piloter la télé par adb (`input keyevent`) : **vérifier d'abord que Subtrad TV est au premier
+plan** (`dumpsys activity activities | grep mResumedActivity`). La famille utilise la télé (appli
+ZenIPTV) : une touche envoyée à l'aveugle est arrivée une fois dans la vidéo de quelqu'un.
 
 Ce qui est connu :
 - Les vidéos protégées par DRM ne sont lisibles ni par VLC, ni par mpv, ni par l'application.

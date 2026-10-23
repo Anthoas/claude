@@ -23,16 +23,20 @@ la vidéo avec la piste « Indonésien (traduit) » choisie d'office.
 
 ## Compiler (étape 3, sur le Mac)
 
-Il faut un JDK 17 et les outils Android en ligne de commande (pas d'Android Studio) :
+Déjà installé sur le Mac (octobre 2026) : JDK 17, Gradle, outils Android en ligne de commande,
+plateforme 35 et build-tools 35.0.0 (pas d'Android Studio). `local.properties` (ignoré par git)
+pointe vers le kit Android.
 
 ```
-brew install openjdk@17 gradle
-brew install --cask android-commandlinetools
-sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-gradle wrapper --gradle-version 8.11.1   # une seule fois, dans tv-app/
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+echo "sdk.dir=/opt/homebrew/share/android-commandlinetools" > local.properties   # si absent
 ./gradlew assembleRelease
-adb install -r app/build/outputs/apk/release/app-release.apk
+adb -s 192.168.1.25:5555 install -r app/build/outputs/apk/release/app-release.apk
 ```
+
+Sur une machine neuve : `brew install openjdk@17 gradle`,
+`brew install --cask android-commandlinetools`, puis
+`sdkmanager "platforms;android-35" "build-tools;35.0.0"` (après `sdkmanager --licenses`).
 
 ## Régler la télé sans la télécommande
 

@@ -45,7 +45,7 @@ fun SubtradApp(prefs: Prefs) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             shape = RectangleShape,
-            colors = SurfaceDefaults.colors(containerColor = Color(0xFF111827)),
+            colors = SurfaceDefaults.colors(containerColor = Color(0xFF111827), contentColor = Color.White),
         ) {
             when (val screen = stack.last()) {
                 Screen.Setup -> SetupScreen(prefs) { connected ->

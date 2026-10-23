@@ -14,7 +14,7 @@
     <string name="search_button">Chercher</string>
     <string name="settings_button">Réglages</string>
     <string name="load_more">Afficher plus</string>
-    <string name="results_count">%1$d résultats</string>
+    <string name="results_count">Résultats : %1$d</string>
     <string name="nothing_ready">Aucune vidéo prête. Cherche un film ou une série, puis choisis « Préparer ».</string>
     <string name="no_results">Aucun résultat.</string>
     <string name="badge_ready">✓ Prêt</string>
