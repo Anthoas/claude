@@ -1,6 +1,7 @@
 package fr.subtrad.tv.ui
 
 import android.net.Uri
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,7 +34,9 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
@@ -54,14 +58,23 @@ fun PlayerScreen(video: VideoDetails, subtitles: File, onExit: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     val exitButton = remember { FocusRequester() }
 
-    val player = remember {
+    // Dolby Vision : d'abord la couche HDR10 avec le décodeur HEVC (voir hevcForDolbyVision) ;
+    // le décodeur Dolby Vision ne sert que si la vidéo n'a pas de couche compatible.
+    var dolbyVision by remember { mutableStateOf(false) }
+    var resumeAt by remember { mutableLongStateOf(0L) }
+
+    val player = remember(dolbyVision) {
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true) // beaucoup de serveurs IPTV redirigent http ↔ https
             .setUserAgent("SubtradTV/0.1")
-        ExoPlayer.Builder(context)
+        val renderers = DefaultRenderersFactory(context)
+            .setEnableDecoderFallback(true)
+            .setMediaCodecSelector(if (dolbyVision) MediaCodecSelector.DEFAULT else hevcForDolbyVision)
+        ExoPlayer.Builder(context, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             .build()
             .apply {
+                addAnalyticsListener(PlaybackLog())
                 trackSelectionParameters = trackSelectionParameters.buildUpon()
                     .setPreferredTextLanguage(video.language)
                     .build()
@@ -71,7 +84,10 @@ fun PlayerScreen(video: VideoDetails, subtitles: File, onExit: () -> Unit) {
                     .setLabel(video.subtitleLabel)
                     .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                     .build()
-                setMediaItem(MediaItem.Builder().setUri(video.url).setSubtitleConfigurations(listOf(track)).build())
+                setMediaItem(
+                    MediaItem.Builder().setUri(video.url).setSubtitleConfigurations(listOf(track)).build(),
+                    resumeAt,
+                )
                 prepare()
                 playWhenReady = true
             }
@@ -80,6 +96,12 @@ fun PlayerScreen(video: VideoDetails, subtitles: File, onExit: () -> Unit) {
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
+                if (!dolbyVision && e.errorCode in DECODER_ERRORS) {
+                    Log.i("SubtradTV", "pas de décodeur HEVC : nouvel essai en Dolby Vision")
+                    resumeAt = player.currentPosition
+                    dolbyVision = true
+                    return
+                }
                 error = "${e.errorCodeName} (${e.cause?.javaClass?.simpleName ?: e.message})"
             }
         }
@@ -102,6 +124,7 @@ fun PlayerScreen(video: VideoDetails, subtitles: File, onExit: () -> Unit) {
                     requestFocus()
                 }
             },
+            update = { view -> view.player = player },
             modifier = Modifier.fillMaxSize(),
         )
         error?.let { message ->
@@ -118,4 +141,23 @@ fun PlayerScreen(video: VideoDetails, subtitles: File, onExit: () -> Unit) {
             }
         }
     }
+}
+
+private val DECODER_ERRORS = setOf(
+    PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+    PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+    PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+    PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+)
+
+/**
+ * Le Dolby Vision des fichiers IPTV est presque toujours le profil 8, qui contient une vidéo HDR10
+ * classique. Sur cette télé, le décodeur Dolby Vision déclare ne pas savoir le lire (« NoSupport »)
+ * et saute la moitié des images, alors que le décodeur HEVC matériel la lit sans peine (c'est ce que
+ * fait ZenIPTV). On cache donc les décodeurs Dolby Vision : ExoPlayer prend la couche HEVC.
+ */
+@OptIn(UnstableApi::class)
+private val hevcForDolbyVision = MediaCodecSelector { mimeType, requiresSecure, requiresTunneling ->
+    if (mimeType == MimeTypes.VIDEO_DOLBY_VISION) emptyList()
+    else MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecure, requiresTunneling)
 }

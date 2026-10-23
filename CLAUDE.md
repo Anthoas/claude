@@ -55,6 +55,12 @@ Ce qui est connu :
   autoriser ») en octobre 2026. La télé doit être allumée ; si adb répond « unauthorized »,
   demander à l'utilisateur de valider le message sur la télé.
 - L'application doit être compilée pour `armeabi-v7a` (32 bits) ; la télé n'a ni curl ni wget.
+- Puce Realtek RTD6748. Les épisodes « 4K » de la playlist sont en **Dolby Vision profil 8**
+  (HEVC 10 bits HDR10, 23,976 i/s). Le décodeur Dolby Vision de la télé ne sait pas le lire
+  (images sautées) : l'application cache les décodeurs Dolby Vision et lit la couche HEVC avec
+  `OMX.realtek.video.decoder` (0 image sautée), avec retour automatique au Dolby Vision si besoin.
+  Journal de lecture : `adb logcat -s SubtradTV` (le tampon du journal est petit : `logcat -G 8M`).
+- L'écran n'a que des modes 60 Hz et 30 Hz (pas de 24 Hz) : léger « judder » 3:2 inévitable.
 
 ## Règles de travail
 - Ne jamais écrire dans le dépôt, un message, une capture ou un journal : clé API, mots de passe,
