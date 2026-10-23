@@ -1,2 +1,7 @@
 tv-debloat/triage-*.txt
 tv-debloat/batch-*
+
+# iptv-subtrad
+__pycache__/
+*.egg-info/
+.pytest_cache/
