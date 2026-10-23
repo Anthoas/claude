@@ -264,6 +264,7 @@ class TranslationPipeline:
         self._results: list[Cue] = []
         self.found = 0
         self.translated = 0
+        self.failed = 0  # lots restés dans la langue d'origine (keep_original_on_error)
 
     def add(self, cues: list[Cue]) -> None:
         for cue in cues:
@@ -293,6 +294,7 @@ class TranslationPipeline:
                 raise
             log.warning("Traduction impossible (%s) : sous-titres d'origine gardés.", exc)
             out = list(batch)
+            self.failed += 1
         with self._lock:
             self._results.extend(out)
             self.translated += len(out)

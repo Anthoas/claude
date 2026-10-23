@@ -18,7 +18,7 @@ import time
 import unicodedata
 import uuid
 import webbrowser
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from pathlib import Path
@@ -35,7 +35,8 @@ from .live import Timeline, display_loop, run_live
 from .pipeline import CueSource, NoSubtitles, check_subtitles, open_cue_source
 from .player import MpvPlayer, VlcPlayer
 from .playlist import Channel, fetch_playlist_text, parse_m3u
-from .subtitles import save_subtitles
+from .store import VideoStore
+from .subtitles import Cue, load_subtitles, save_subtitles
 from .translate import DEFAULT_MODEL, ClaudeTranslator, TranslationPipeline
 
 MODELS = {
@@ -180,6 +181,16 @@ class Job:
     usage: str = ""
     error: str = ""
     started_at: float = 0.0  # horodatage UNIX : la page en déduit le temps écoulé
+    channel_id: int = -1  # entrée de la liste concernée
+    channel_url: str = field(default="", repr=False)  # jamais envoyé à la page (identifiants)
+    saved: bool = False  # les sous-titres traduits sont gardés : la prochaine ouverture sera immédiate
+
+
+def job_public(job: Job) -> dict:
+    """Ce que la page voit d'une lecture : jamais l'adresse du flux (identifiants)."""
+    data = asdict(job)
+    data.pop("channel_url", None)
+    return data
 
 
 def _default_player(name: str):
@@ -197,6 +208,7 @@ class GuiApp:
         hls: HlsClient | None = None,
         transcriber_factory: Callable[[], object] | None = None,
         whisper_backend: Callable[[], str | None] | None = None,
+        store: VideoStore | None = None,
     ):
         self.settings = settings
         self.playlist_cache = playlist_cache
@@ -208,6 +220,7 @@ class GuiApp:
         self.make_player = player_factory or _default_player
         self.make_cache = cache_factory or TranslationCache
         self.hls = hls or HlsClient()
+        self.store = store or VideoStore()
         self._transcriber = None
         self._transcriber_factory = transcriber_factory or transcribe.make_transcriber
         self.whisper_backend = whisper_backend or transcribe.backend_name
@@ -252,6 +265,25 @@ class GuiApp:
             raise ValueError("Aucun lien enregistré : colle d'abord le lien de la playlist.")
         return self.load_playlist(source=self.settings["playlist_source"])
 
+    # --- mémoire par vidéo ---
+
+    def _store_args(self, channel: Channel) -> tuple[str, str, str, str]:
+        return (channel.url, self.settings["depuis"], self.settings["vers"], self.settings["model"])
+
+    def is_ready(self, channel: Channel) -> bool:
+        return self.store.translation_file(*self._store_args(channel)) is not None
+
+    def search(self, query="", kind="", group="", offset=0, limit=100) -> dict:
+        result = self.library.search(query, kind, group, offset, limit)
+        for item in result["items"]:
+            item["ready"] = self.is_ready(self.library.get(item["id"]))
+        return result
+
+    def forget(self, index: int) -> dict:
+        """Oublie les sous-titres gardés pour cette vidéo (pour tout refaire)."""
+        self.store.forget(*self._store_args(self.library.get(index)))
+        return {"ready": False}
+
     # --- sous-titres et lecture ---
 
     def check(self, index: int) -> dict:
@@ -260,7 +292,8 @@ class GuiApp:
 
     def watch(self, index: int) -> Job:
         channel = self.library.get(index)
-        job = Job(id=uuid.uuid4().hex[:8], title=channel.name, started_at=time.time())
+        job = Job(id=uuid.uuid4().hex[:8], title=channel.name, started_at=time.time(),
+                  channel_id=index, channel_url=channel.url)
         self.jobs[job.id] = job
         # (annulation demandée, arrêt de tout travail en cours : annulation ou vidéo fermée)
         self._events[job.id] = (threading.Event(), threading.Event())
@@ -286,12 +319,23 @@ class GuiApp:
             job.fetch_step, job.fraction = message, fraction
 
         try:
+            ready = self.store.translation_file(*self._store_args(channel))
+            if ready:  # déjà fait : rien à récupérer, rien à traduire, rien à payer
+                self._play_saved(job, channel, ready, cancelled)
+                job.state, job.step = "done", "Terminé."
+                return
             translator = self.make_translator(self.settings)
-            source = open_cue_source(
-                channel.url, self.settings["depuis"], hls=self.hls, on_status=status,
-                cancel=halt, on_note=lambda message: setattr(job, "note", message),
-                transcriber_factory=self._get_transcriber if self._whisper_enabled() else None,
-            )
+            saved = self.store.load_source(channel.url, self.settings["depuis"])
+            if saved:  # sous-titres d'origine déjà récupérés : on saute la lecture du fichier
+                cues, origin = saved
+                job.note = "Sous-titres d'origine déjà récupérés lors d'un essai précédent."
+                source = CueSource(f"{origin} (gardés)", "saved", [cues])
+            else:
+                source = open_cue_source(
+                    channel.url, self.settings["depuis"], hls=self.hls, on_status=status,
+                    cancel=halt, on_note=lambda message: setattr(job, "note", message),
+                    transcriber_factory=self._get_transcriber if self._whisper_enabled() else None,
+                )
             cache = self.make_cache()
             if source.live_track:
                 self._play_live(job, channel, source, translator, cache, cancelled)
@@ -320,6 +364,19 @@ class GuiApp:
         player.start(url, **kwargs)
         return player
 
+    def _play_saved(self, job: Job, channel: Channel, path: Path, cancelled) -> None:
+        """Rouvre une vidéo dont la traduction est déjà gardée : le lecteur démarre aussitôt."""
+        name = self.settings["lecteur"]
+        job.found = job.translated = len(load_subtitles(path))
+        job.fetch_done, job.phase, job.saved = True, 3, True
+        job.note = "Sous-titres déjà prêts (traduits lors d'un essai précédent) : aucun coût."
+        job.state = "playing"
+        job.step = f"Lecture en cours dans {PLAYER_NAMES[name]}."
+        player = self._start_player(job, name, channel.url, subtitle=path, title=channel.name)
+        player.wait()
+        if cancelled.is_set():
+            raise Cancelled()
+
     def _play_live(self, job, channel, source: CueSource, translator, cache, cancelled) -> None:
         if self.settings["lecteur"] != "mpv":
             job.note = "Direct : mpv est utilisé, VLC ne sait pas afficher des sous-titres au fil de l'eau."
@@ -339,22 +396,33 @@ class GuiApp:
                                        on_batch=on_batch, cancel=halt, **kwargs)
         return pipeline
 
-    def _feed(self, job: Job, source: CueSource, pipeline: TranslationPipeline, halt) -> None:
+    def _feed(self, job: Job, source: CueSource, pipeline: TranslationPipeline, halt,
+              originals: list[Cue]) -> None:
         for group in source.groups:
             if halt.is_set():
                 raise Cancelled()
+            originals.extend(group)
             pipeline.add(group)
             job.found = pipeline.found
             if source.flush_each_group:
                 pipeline.flush()
         job.fetch_done, job.fraction = True, 1.0
+        if source.kind != "saved":  # récupération terminée : on la garde pour ne pas la refaire
+            self.store.save_source(job.channel_url, self.settings["depuis"], originals, source.origin)
+
+    def _save_translation(self, job: Job, translated: list[Cue], failed: int) -> None:
+        if translated and not failed:  # jamais une traduction à moitié faite
+            self.store.save_translation(job.channel_url, self.settings["depuis"],
+                                        self.settings["vers"], self.settings["model"], translated)
+            job.saved = True
 
     def _play_after_translation(self, job, channel, source: CueSource, translator, cache, halt):
         """VLC : tout est récupéré et traduit (en parallèle), puis la vidéo s'ouvre."""
         pipeline = self._pipeline(job, translator, cache, halt)
+        originals: list[Cue] = []
         try:
             job.step = "Récupération et traduction des sous-titres…"
-            self._feed(job, source, pipeline, halt)
+            self._feed(job, source, pipeline, halt, originals)
             job.phase, job.step = 2, "Traduction des dernières répliques…"
             translated = pipeline.finish()
         finally:
@@ -364,6 +432,7 @@ class GuiApp:
         if not translated:
             raise NoSubtitles("Aucune réplique trouvée dans ce fichier.")
         job.usage = translator.usage_summary()
+        self._save_translation(job, translated, pipeline.failed)
         name = f"sous-titres.{self.settings['vers']}.srt"
         sub_path = Path(tempfile.mkdtemp(prefix="subtrad-")) / name
         save_subtitles(translated, sub_path)
@@ -386,11 +455,12 @@ class GuiApp:
         pipeline.on_batch = on_batch
         feeder_errors: list[BaseException] = []
         feeder_done = threading.Event()
+        originals: list[Cue] = []
 
         def feed() -> None:
             try:
-                self._feed(job, source, pipeline, halt)
-                pipeline.finish()
+                self._feed(job, source, pipeline, halt, originals)
+                self._save_translation(job, pipeline.finish(), pipeline.failed)
             except BaseException as exc:
                 feeder_errors.append(exc)
             finally:
@@ -475,13 +545,13 @@ class _Handler(BaseHTTPRequestHandler):
                                    "whisper_backend": app.whisper_backend(),
                                    "kinds": app.library.kinds()})
             if (method, path) == ("GET", "/api/search"):
-                return self._json(app.library.search(
+                return self._json(app.search(
                     params.get("q", ""), params.get("kind", ""), params.get("group", ""),
                     int(params.get("offset", 0)), min(int(params.get("limit", 100)), 500)))
             if (method, path) == ("GET", "/api/groups"):
                 return self._json(app.library.groups(params.get("kind", "")))
             if (method, path) == ("GET", "/api/jobs"):
-                return self._json([asdict(j) for j in reversed(list(app.jobs.values()))])
+                return self._json([job_public(j) for j in reversed(list(app.jobs.values()))])
             if (method, path) == ("POST", "/api/playlist"):
                 return self._json(app.load_playlist(params.get("source", ""), params.get("text", "")))
             if (method, path) == ("POST", "/api/playlist/refresh"):
@@ -495,10 +565,12 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._json(app.settings.public())
             if (method, path) == ("POST", "/api/check"):
                 return self._json(app.check(int(params["id"])))
+            if (method, path) == ("POST", "/api/forget"):
+                return self._json(app.forget(int(params["id"])))
             if (method, path) == ("POST", "/api/cancel"):
-                return self._json(asdict(app.cancel(str(params["id"]))))
+                return self._json(job_public(app.cancel(str(params["id"]))))
             if (method, path) == ("POST", "/api/watch"):
-                return self._json(asdict(app.watch(int(params["id"]))))
+                return self._json(job_public(app.watch(int(params["id"]))))
             return self._json({"error": "Introuvable."}, 404)
         except Exception as exc:
             return self._json({"error": friendly_error(exc)}, 400)

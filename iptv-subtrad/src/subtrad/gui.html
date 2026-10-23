@@ -59,6 +59,7 @@
   .logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
   .name { font-weight: 600; overflow-wrap: anywhere; }
   .meta { color: var(--muted); font-size: 13px; }
+  .badge.ready { color: var(--ok); border-color: var(--ok); }
   .badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px;
            border: 1px solid var(--line); margin-right: 6px; color: var(--text); }
   .status { font-size: 13px; margin-top: 3px; }
@@ -308,12 +309,14 @@ async function search(append = false) {
   if (seq !== searchSeq) return; // une frappe plus récente a déjà relancé la recherche
   state.total = r.total;
   const list = $("#list");
-  if (!append) list.replaceChildren();
+  if (!append) { list.replaceChildren(); itemNodes.clear(); }
   list.append(...r.items.map(renderItem));
   state.offset += r.items.length;
   $("#count").textContent = r.total ? `${fmt(r.total)} résultat${r.total > 1 ? "s" : ""}` : "Aucun résultat.";
   $("#more").classList.toggle("hidden", state.offset >= r.total);
 }
+
+const itemNodes = new Map(); // id -> { update(ready) } pour mettre la ligne à jour sans tout recharger
 
 function renderItem(item) {
   const initial = (item.name.trim()[0] || "?").toUpperCase();
@@ -328,16 +331,32 @@ function renderItem(item) {
   }
   const status = el("div", { className: "status" });
   const check = el("button", { textContent: "Sous-titres ?", title: "Vérifier si ce flux a des sous-titres utilisables" });
-  const watch = el("button", { className: "primary", textContent: "▶ Regarder traduit" });
+  const watch = el("button", { className: "primary" });
+  const redo = el("button", { textContent: "Refaire", className: "hidden",
+                              title: "Oublier les sous-titres gardés et tout recommencer" });
+  const badge = el("span", { className: "badge ready hidden", textContent: "✓ déjà traduit" });
   check.addEventListener("click", () => checkItem(item, check, status));
   watch.addEventListener("click", () => watchItem(item, watch));
+  redo.addEventListener("click", async () => {
+    if (!confirm("Oublier les sous-titres gardés pour cette vidéo et tout refaire la prochaine fois ?")) return;
+    try { await api("/api/forget", { id: item.id }); update(false); } catch (e) { alert(e.message); }
+  });
+  function update(ready) {
+    item.ready = ready;
+    badge.classList.toggle("hidden", !ready);
+    redo.classList.toggle("hidden", !ready);
+    watch.textContent = ready ? "▶ Regarder (prêt)" : "▶ Regarder traduit";
+    watch.title = ready ? "Les sous-titres sont déjà prêts : la vidéo s'ouvre tout de suite, sans frais." : "";
+  }
+  update(!!item.ready);
+  itemNodes.set(item.id, { update });
   return el("li", { className: "item" },
     logo,
     el("div", {},
       el("div", { className: "name", textContent: item.name }),
-      el("div", { className: "meta" }, el("span", { className: "badge", textContent: item.kind_label }), item.group),
+      el("div", { className: "meta" }, el("span", { className: "badge", textContent: item.kind_label }), badge, item.group),
       status),
-    el("div", { className: "actions" }, check, watch));
+    el("div", { className: "actions" }, redo, check, watch));
 }
 
 async function checkItem(item, button, status) {
@@ -399,11 +418,18 @@ $("#more").addEventListener("click", () => search(true));
 // --- Lectures en cours ---------------------------------------------------------
 
 const hiddenJobs = new Set();
+const savedSeen = new Set();
 let pollTimer;
 async function pollJobs() {
   clearTimeout(pollTimer);
   let jobs = [];
   try { jobs = await api("/api/jobs"); } catch { /* serveur arrêté */ }
+  for (const job of jobs) {
+    if (job.saved && !savedSeen.has(job.id)) {
+      savedSeen.add(job.id);
+      itemNodes.get(job.channel_id)?.update(true);
+    }
+  }
   renderJobs(jobs.filter((j) => !hiddenJobs.has(j.id)));
   const active = jobs.some((j) => j.state === "running" || j.state === "playing");
   pollTimer = setTimeout(pollJobs, active ? 1000 : 5000);

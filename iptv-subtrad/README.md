@@ -95,6 +95,14 @@ ce mode. Il demande **mpv** : VLC ne permet pas d'afficher des sous-titres au fi
 Réglages : `--marge N` si des sous-titres arrivent en retard, `--decalage S` si le texte est
 en avance (S < 0) ou en retard (S > 0) sur la parole, `--taille` pour la taille du texte.
 
+## Mémoire par vidéo
+
+`store.py` garde dans `~/.cache/subtrad/videos/` les sous-titres d'origine (JSON) et la traduction
+terminée (.srt) de chaque vidéo, sous des noms dérivés d'une empreinte de l'adresse (jamais l'adresse
+elle-même, qui contient souvent identifiant et mot de passe). Une vidéo déjà traduite s'ouvre
+aussitôt, sans clé ni coût ; seul un travail complet est gardé (ni annulation, ni lot en échec).
+Le badge « déjà traduit » et le bouton « Refaire » de la page s'appuient dessus.
+
 ## Cache
 
 Chaque traduction affiche à la fin son coût estimé (tokens et dollars). Les prix sont dans

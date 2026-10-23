@@ -263,6 +263,19 @@ Exemple : `subtrad regarder "adresse" --decalage -1 --marge 8`
 
 Pour VLC, installe-le d'abord avec `brew install --cask vlc`.
 
+## Rien n'est refait deux fois
+
+Le programme **garde** ce qu'il a fait pour chaque vidéo, dans `~/.cache/subtrad/videos/` :
+- dès qu'une traduction est terminée, la vidéo porte le badge **✓ déjà traduit** dans la liste,
+  et le bouton devient **▶ Regarder (prêt)** : elle s'ouvre **tout de suite**, sans lire le
+  fichier, sans traduire, **sans frais** (et même sans clé Claude) ;
+- les **sous-titres d'origine** sont gardés dès qu'ils sont récupérés : si tu changes de modèle ou de
+  langue, seule la traduction est refaite, pas la lecture du fichier ;
+- **Refaire** (à côté du bouton) oublie tout pour cette vidéo, si tu veux tout recommencer.
+
+Si tu annules ou fermes une vidéo avant la fin de la préparation, rien n'est gardé (on ne garde
+jamais un travail incomplet) : la fois suivante, la préparation recommence au début.
+
 ## Si c'est long : lire la ligne orange
 
 Quand un fichier ne peut pas être lu rapidement, la carte de progression affiche en **orange** la

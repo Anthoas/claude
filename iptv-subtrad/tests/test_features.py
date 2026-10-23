@@ -11,6 +11,7 @@ from subtrad.cache import TranslationCache
 from subtrad.errors import Cancelled
 from subtrad.gui import GuiApp, Settings
 from subtrad.hls import HlsClient
+from subtrad.store import VideoStore
 from subtrad.subtitles import Cue
 from subtrad.transcribe import (
     SAMPLE_RATE, Segment, WhisperCppTranscriber, _cut_point, _samples, ensure_model,
@@ -147,6 +148,7 @@ def make_app(tmp_path, translator=None, player=FakePlayer, **settings):
         cache_factory=lambda: TranslationCache(":memory:"),
         hls=HlsClient(FakeSession(PAGES)),
         whisper_backend=lambda: None,
+        store=VideoStore(tmp_path / "videos"),
     )
     if settings:
         app.settings.update(**settings)

@@ -11,6 +11,7 @@ from subtrad.cache import TranslationCache
 from subtrad.gui import GuiApp, Library, Settings, make_server, normalize
 from subtrad.hls import HlsClient
 from subtrad.pipeline import check_subtitles
+from subtrad.store import VideoStore
 
 from test_hls import BASE, MASTER, SEG0, SEG1, SUB_PLAYLIST, FakeSession
 
@@ -101,6 +102,7 @@ def server(tmp_path):
         cache_factory=lambda: TranslationCache(":memory:"),
         hls=HlsClient(FakeSession(PAGES)),
         whisper_backend=lambda: None,
+        store=VideoStore(tmp_path / "videos"),
     )
     srv, token = make_server(app, port=0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
