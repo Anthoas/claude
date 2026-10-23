@@ -172,6 +172,9 @@
     <option value="off">Ne rien faire</option>
   </select>
   <div id="whisper-hint" class="hint"></div>
+  <label for="tmdb-key">Clé TMDB (titres et résumés des épisodes)</label>
+  <input id="tmdb-key" type="password" autocomplete="off" placeholder="clé d'API de themoviedb.org">
+  <div id="tmdb-hint" class="hint"></div>
   <label for="tele">Regarder sur la télé</label>
   <select id="tele">
     <option value="off">Désactivé</option>
@@ -511,6 +514,10 @@ function openSettings() {
     ? `Whisper est installé (moteur ${s.whisper_backend}). Gratuit, mais plus lent que de vrais sous-titres.`
     : "Whisper n'est pas installé : dans le Terminal, tape « brew install whisper-cpp » puis relance subtrad gui.";
   $("#tele").value = s.tele;
+  $("#tmdb-key").value = "";
+  $("#tmdb-hint").textContent = s.has_tmdb_key
+    ? "Une clé TMDB est enregistrée. Laisse vide pour la garder."
+    : "Facultatif : sur themoviedb.org, Paramètres → API, crée une clé gratuite et colle-la ici.";
   showTele(s);
   $("#depuis").value = s.depuis;
   $("#vers").value = s.vers;
@@ -550,7 +557,17 @@ $("#save-settings").addEventListener("click", async () => {
       api_key: $("#api-key").value.trim(), model: $("#model").value,
       depuis: $("#depuis").value, vers: $("#vers").value,
       lecteur: $("#lecteur").value, whisper: $("#whisper").value, tele: $("#tele").value,
+      tmdb_key: $("#tmdb-key").value.trim(),
     }) };
+    if (state.settings.tmdb_ok === false) {
+      $("#tmdb-key").value = "";
+      $("#tmdb-hint").textContent = "TMDB a refusé cette clé : vérifie-la sur themoviedb.org (Paramètres → API).";
+      return;
+    }
+    if (state.settings.tmdb_ok === true) {
+      $("#tmdb-key").value = "";
+      $("#tmdb-hint").textContent = "Clé TMDB acceptée et enregistrée.";
+    }
     if (state.settings.tele === "on") {
       showTele(state.settings);  // le dialogue reste ouvert : il affiche l'adresse et le code
     } else {

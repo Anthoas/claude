@@ -154,6 +154,12 @@ serveur du fournisseur ne sont jamais transmises. Langue : `lang=FR` par défaut
 | `GET /tele/api/catalog/movies?category=&q=&offset=&limit=` | films (`vod_id`, `id`, affiche, `ready`) |
 | `GET /tele/api/catalog/movie?id=VOD_ID` | fiche d'un film : résumé, durée, genre, `id`, `ready` |
 
+Avec une clé TMDB (⚙ Réglages, vérifiée à l'enregistrement, jamais renvoyée à la page ni à la
+télé), `tmdb.py` complète les épisodes : titre, résumé et image en français, d'après le numéro TMDB
+que le fournisseur glisse dans `info.id`, sinon une recherche par nom et année. Réponses gardées
+30 jours dans `~/.cache/subtrad/tmdb/` (fichiers privés). Les données du fournisseur restent
+prioritaires ; TMDB injoignable ou clé refusée : rien ne change.
+
 Attention : l'abonnement actuel n'autorise **qu'une connexion vidéo à la fois**
 (`max_connections: 1`). Une préparation sur le Mac pendant une lecture sur la télé peut être
 coupée par le serveur (la reprise automatique de ffmpeg limite le problème).
@@ -198,6 +204,7 @@ répliques ID ──► replay : fichier .srt ──► player.py (mpv ou VLC, -
 | `gui.py`, `gui.html` | interface graphique : serveur local (127.0.0.1, jeton de session) et page web |
 | `tele.py` | accès télé : serveur sur le Wi-Fi de la maison, protégé par un code |
 | `xtream.py` | catalogue Xtream Codes (séries par saison, films, affiches, résumés) |
+| `tmdb.py` | titres, résumés et images d'épisodes depuis TMDB (clé facultative dans les réglages) |
 
 ## Limites actuelles et prochaines étapes
 

@@ -18,6 +18,7 @@ import re
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -27,6 +28,7 @@ import requests
 
 from .cache import default_cache_path
 from .playlist import Channel
+from .tmdb import EpisodeGuide
 
 REFRESH_SECONDS = 24 * 3600  # le catalogue est rechargé une fois par jour
 INFO_SECONDS = 3600  # détail d'une série gardé une heure
@@ -192,8 +194,10 @@ class Catalog:
         channels: Callable[[], list[Channel]],
         directory: Path | None = None,
         clock: Callable[[], float] = time.time,
+        guide: EpisodeGuide | None = None,
     ):
         self._client_factory = client_factory
+        self.guide = guide
         self._channels = channels
         self.directory = Path(directory) if directory else default_catalog_dir()
         self._clock = clock
@@ -368,10 +372,13 @@ class Catalog:
             episodes = {str(i + 1): season for i, season in enumerate(episodes)}
         names = {str(s.get("season_number")): s.get("name") or "" for s in info.get("seasons") or []}
         seasons = []
+        tmdb_ids = []  # le fournisseur cache souvent le numéro TMDB de la série dans info.id
         for number in sorted(episodes, key=lambda n: int(n) if str(n).isdigit() else 0):
             items = []
             for e in sorted(episodes[number], key=lambda e: int(e.get("episode_num") or 0)):
                 einfo = e.get("info") if isinstance(e.get("info"), dict) else {}
+                if str(einfo.get("id") or "").isdigit():
+                    tmdb_ids.append(int(einfo["id"]))
                 vid = self.video_id("series", e.get("id"))
                 items.append({
                     "id": vid, "episode": int(e.get("episode_num") or 0),
@@ -382,6 +389,8 @@ class Catalog:
                 })
             seasons.append({"season": int(number) if str(number).isdigit() else 0,
                             "name": names.get(str(number)) or f"Saison {number}", "episodes": items})
+        year = (about.get("releaseDate") or summary.get("releaseDate") or "")[:4]
+        self._complete_with_tmdb(seasons, tmdb_ids, clean_name(summary.get("name", "")), year)
         return {
             "series_id": summary.get("series_id"), "name": clean_name(summary.get("name", "")),
             "cover": self._image(about.get("cover") or summary.get("cover")),
@@ -394,6 +403,29 @@ class Catalog:
             "rating": rating_text(about.get("rating") or summary.get("rating")),
             "seasons": seasons, "next": next_episode(seasons),
         }
+
+    def _complete_with_tmdb(self, seasons: list[dict], tmdb_ids: list[int], name: str, year: str) -> None:
+        """Titres, résumés et images d'épisodes que le fournisseur ne donne pas (si clé TMDB)."""
+        if self.guide is None or not self.guide.available():
+            return
+        try:
+            tv_id = max(set(tmdb_ids), key=tmdb_ids.count) if tmdb_ids else self.guide.find_series(name, year)
+            if not tv_id:
+                return
+            numbers = [s["season"] for s in seasons if s["season"] > 0]
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                found = dict(zip(numbers, pool.map(lambda n: self.guide.season(tv_id, n), numbers)))
+        except Exception:
+            return  # TMDB injoignable ou clé refusée : on garde ce que donne le fournisseur
+        for season in seasons:
+            extra = found.get(season["season"]) or {}
+            for e in season["episodes"]:
+                more = extra.get(e["episode"])
+                if more:
+                    e["title"] = e["title"] or more["title"]
+                    e["plot"] = e["plot"] or more["plot"]
+                    e["image"] = e["image"] or more["image"]
+                    e["air_date"] = e["air_date"] or more["air_date"]
 
     def movie_detail(self, vod_id: int, status: Status | None = None) -> dict:
         data = self._ensure()

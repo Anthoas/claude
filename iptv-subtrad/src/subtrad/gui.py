@@ -37,6 +37,7 @@ from .player import MpvPlayer, VlcPlayer
 from .playlist import Channel, fetch_playlist_text, parse_m3u
 from .store import VideoStore
 from .subtitles import Cue, load_subtitles, save_subtitles
+from .tmdb import EpisodeGuide, TmdbClient
 from .translate import DEFAULT_MODEL, ClaudeTranslator, TranslationPipeline
 from .xtream import Catalog, XtreamAccount, XtreamClient
 
@@ -73,7 +74,7 @@ class Settings:
 
     DEFAULTS = {"playlist_source": "", "api_key": "", "model": DEFAULT_MODEL,
                 "depuis": "fr", "vers": "id", "lecteur": "vlc", "whisper": "on",
-                "tele": "off", "tele_code": ""}
+                "tele": "off", "tele_code": "", "tmdb_key": ""}
     CHOICES = {"lecteur": set(PLAYERS), "whisper": {"on", "off"}, "model": set(MODELS),
                "tele": {"on", "off"}}
 
@@ -118,6 +119,7 @@ class Settings:
             "models": MODELS, "lecteur": self.data["lecteur"], "players": PLAYERS,
             "whisper": self.data["whisper"], "tele": self.data["tele"],
             "tele_code": self.tv_code() if self.data["tele"] == "on" else "",
+            "has_tmdb_key": bool(self.data["tmdb_key"]),
         }
 
 
@@ -243,7 +245,8 @@ class GuiApp:
         self._transcriber_factory = transcriber_factory or transcribe.make_transcriber
         self.whisper_backend = whisper_backend or transcribe.backend_name
         self.tv = None  # TvAccess, branché par run_gui
-        self.catalog = catalog or Catalog(self._xtream_client, lambda: self.library.channels)
+        self.guide = EpisodeGuide(self._tmdb_client)
+        self.catalog = catalog or Catalog(self._xtream_client, lambda: self.library.channels, guide=self.guide)
         if playlist_cache.exists():
             self.library.load_text(playlist_cache.read_text(encoding="utf-8", errors="replace"))
 
@@ -305,6 +308,10 @@ class GuiApp:
         """Oublie les sous-titres gardés pour cette vidéo (pour tout refaire)."""
         self.store.forget(*self._store_args(self.library.get(index)))
         return {"ready": False}
+
+    def _tmdb_client(self) -> TmdbClient | None:
+        key = self.settings["tmdb_key"]
+        return TmdbClient(key) if key else None
 
     def _xtream_client(self) -> XtreamClient | None:
         account = XtreamAccount.from_playlist_source(self.settings["playlist_source"])
@@ -677,15 +684,21 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._json(app.refresh_playlist())
             if (method, path) == ("POST", "/api/settings"):
                 values = {k: str(params[k]) for k in
-                          ("model", "depuis", "vers", "api_key", "lecteur", "whisper", "tele")
+                          ("model", "depuis", "vers", "api_key", "lecteur", "whisper", "tele", "tmdb_key")
                           if k in params}
-                if "api_key" in values and not values["api_key"]:
-                    del values["api_key"]  # champ laissé vide : on garde la clé actuelle
+                for secret in ("api_key", "tmdb_key"):
+                    if secret in values and not values[secret].strip():
+                        del values[secret]  # champ laissé vide : on garde la clé actuelle
+                tmdb_ok = None
+                if "tmdb_key" in values:  # nouvelle clé TMDB : on vérifie qu'elle marche
+                    tmdb_ok = TmdbClient(values["tmdb_key"]).check()
+                    if not tmdb_ok:
+                        del values["tmdb_key"]
                 app.settings.update(**values)
                 if params.get("nouveau_code_tele"):
                     app.settings.new_tv_code()
                 app.apply_tv()
-                return self._json({**app.settings.public(), "tele_status": app.tv_status()})
+                return self._json({**app.settings.public(), "tele_status": app.tv_status(), "tmdb_ok": tmdb_ok})
             if (method, path) == ("POST", "/api/check"):
                 return self._json(app.check(int(params["id"])))
             if (method, path) == ("POST", "/api/forget"):
