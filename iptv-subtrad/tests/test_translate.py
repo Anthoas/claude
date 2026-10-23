@@ -1,3 +1,4 @@
+import pytest
 import json
 from types import SimpleNamespace
 
@@ -108,3 +109,36 @@ def test_refused_single_cue_is_kept_and_not_cached():
     assert [c.text for c in result] == ["BONJOUR.", "Je vais te tuer !", "MERCI."]
     namespace = ClaudeTranslator(client=client).namespace
     assert set(cache.get_many(namespace, [c.text for c in cues])) == {"Bonjour.", "Merci."}
+
+
+def _usage_client(input_tokens, output_tokens):
+    reply = {"translations": [{"id": 0, "text": "Halo."}]}
+
+    def create(**kwargs):
+        return SimpleNamespace(
+            stop_reason="end_turn", stop_details=None,
+            usage=SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens),
+            content=[SimpleNamespace(type="text", text=json.dumps(reply))],
+        )
+
+    return SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
+
+
+def test_usage_and_cost_are_tracked():
+    translator = ClaudeTranslator(model="claude-sonnet-5-5", client=_usage_client(1500, 2500))
+    assert translator.usage_summary().startswith("aucune requête")
+    translator.translate_batch(["Bonjour."], [])
+    translator.translate_batch(["Bonjour."], [])
+    assert (translator.calls, translator.input_tokens, translator.output_tokens) == (2, 3000, 5000)
+    # 3000 x 2 $/M + 5000 x 10 $/M = 0,056 $
+    assert translator.estimated_cost() == pytest.approx(0.056)
+    assert translator.usage_summary() == (
+        "coût estimé : 0,056 $, 2 requêtes, 3 000 tokens envoyés et 5 000 reçus"
+    )
+
+
+def test_cost_unknown_for_unlisted_model():
+    translator = ClaudeTranslator(model="un-autre-modele", client=_usage_client(10, 10))
+    translator.translate_batch(["Bonjour."], [])
+    assert translator.estimated_cost() is None
+    assert "coût" not in translator.usage_summary()

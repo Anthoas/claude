@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import extract
 from .cache import TranslationCache
+from .demo import demo_cues, demo_video_url
 from .hls import HlsClient
 from .pipeline import fetch_source_subtitles
 from .playlist import load_playlist
@@ -27,6 +28,14 @@ def _translator(args) -> ClaudeTranslator:
     return ClaudeTranslator(
         source=args.depuis, target=args.vers, model=args.modele, effort=args.effort
     )
+
+
+def _print_usage(translator: ClaudeTranslator) -> None:
+    print(f"  {translator.usage_summary()}", file=sys.stderr)
+
+
+def _fmt_time(ms: int) -> str:
+    return f"{ms // 60000:02d}:{ms // 1000 % 60:02d}"
 
 
 def cmd_chaines(args) -> int:
@@ -61,12 +70,39 @@ def cmd_pistes(args) -> int:
 def cmd_traduire(args) -> int:
     cues = load_subtitles(args.entree)
     out = Path(args.sortie or Path(args.entree).with_suffix(f".{args.vers}.srt"))
+    translator = _translator(args)
     translated = translate_cues(
-        cues, _translator(args), TranslationCache(), args.lot, on_progress=_progress
+        cues, translator, TranslationCache(), args.lot, on_progress=_progress
     )
+    _print_usage(translator)
     save_subtitles(translated, out)
     print(f"{len(translated)} répliques écrites dans {out}")
     return 0
+
+
+def cmd_demo(args) -> int:
+    from .player import MpvPlayer
+
+    cues = demo_cues()
+    translator = _translator(args)
+    print(f"Traduction de la scène de démonstration ({len(cues)} répliques)…", file=sys.stderr)
+    translated = translate_cues(
+        cues, translator, TranslationCache(), args.lot, on_progress=_progress
+    )
+    _print_usage(translator)
+    print()
+    for src, dst in zip(cues, translated):
+        print(f"[{_fmt_time(src.start_ms)}] {src.text.replace(chr(10), ' / ')}")
+        print(f"        -> {dst.text.replace(chr(10), ' / ')}")
+    if args.sans_lecture:
+        return 0
+
+    sub_path = Path(args.sortie) if args.sortie else (
+        Path(tempfile.mkdtemp(prefix="subtrad-")) / f"demo.{args.vers}.srt"
+    )
+    save_subtitles(translated, sub_path)
+    print("\nOuverture de mpv (écran uni : seuls les sous-titres comptent)…", file=sys.stderr)
+    return MpvPlayer(args.lecteur_chemin).start(demo_video_url(), sub_path).wait()
 
 
 def cmd_regarder(args) -> int:
@@ -78,9 +114,11 @@ def cmd_regarder(args) -> int:
         return _regarder_direct(args, source)
     print(f"  {len(source.cues)} répliques ({source.origin})", file=sys.stderr)
 
+    translator = _translator(args)
     translated = translate_cues(
-        source.cues, _translator(args), TranslationCache(), args.lot, on_progress=_progress
+        source.cues, translator, TranslationCache(), args.lot, on_progress=_progress
     )
+    _print_usage(translator)
     sub_path = Path(args.sortie) if args.sortie else (
         Path(tempfile.mkdtemp(prefix="subtrad-")) / f"sous-titres.{args.vers}.srt"
     )
@@ -104,10 +142,15 @@ def _regarder_direct(args, source) -> int:
     print(f"  lecture {args.marge} segments derrière le direct, le temps de traduire.",
           file=sys.stderr)
     player = MpvPlayer(args.lecteur_chemin, font_size=args.taille)
-    return run_live(
-        args.url, source.live_track, _translator(args), player, TranslationCache(),
-        batch_size=args.lot, segments_behind=args.marge, offset_ms=int(args.decalage * 1000),
-    )
+    translator = _translator(args)
+    try:
+        return run_live(
+            args.url, source.live_track, translator, player, TranslationCache(),
+            batch_size=args.lot, segments_behind=args.marge,
+            offset_ms=int(args.decalage * 1000),
+        )
+    finally:
+        _print_usage(translator)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -140,6 +183,13 @@ def build_parser() -> argparse.ArgumentParser:
                        help="traduire un fichier de sous-titres local (.srt, .vtt, .ass)")
     p.add_argument("entree")
     p.set_defaults(func=cmd_traduire)
+
+    p = sub.add_parser("demo", parents=[translation],
+                       help="tester sur une scène de 2 minutes en français parlé")
+    p.add_argument("--lecteur-chemin", help="chemin du binaire de mpv")
+    p.add_argument("--sans-lecture", action="store_true",
+                   help="afficher la traduction dans le Terminal sans ouvrir mpv")
+    p.set_defaults(func=cmd_demo)
 
     p = sub.add_parser("regarder", parents=[translation],
                        help="récupérer, traduire et lire un flux (replay ou direct)")

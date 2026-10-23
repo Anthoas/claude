@@ -38,6 +38,10 @@ subtrad regarder "https://exemple.fr/direct/master.m3u8" --marge 8 --decalage -0
 
 # Traduire un fichier de sous-titres déjà téléchargé
 subtrad traduire episode.fr.srt -o episode.id.srt
+
+# Tester sans flux : scène de 2 minutes en français, traduction affichée puis lue dans mpv
+subtrad demo
+subtrad demo --modele claude-haiku-5-5   # modèle ~20x moins cher, pour comparer
 ```
 
 Options utiles : `--depuis fr --vers id` (langues), `--modele` (modèle Claude, défaut
@@ -63,6 +67,9 @@ Réglages : `--marge N` si des sous-titres arrivent en retard, `--decalage S` si
 en avance (S < 0) ou en retard (S > 0) sur la parole, `--taille` pour la taille du texte.
 
 ## Cache
+
+Chaque traduction affiche à la fin son coût estimé (tokens et dollars). Les prix sont dans
+`PRICES` (`translate.py`).
 
 Les traductions sont mises en cache dans `~/.cache/subtrad/translations.sqlite` : relancer un
 même épisode ne coûte rien.

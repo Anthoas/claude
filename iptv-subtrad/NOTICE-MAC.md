@@ -98,6 +98,21 @@ Cette clé est un mot de passe : ne la partage avec personne.
 mesuré : regarde ta consommation sur console.anthropic.com après les premiers essais. Les
 traductions sont mémorisées : revoir le même programme ne coûte rien.
 
+## Étape 5 bis : tester sans aucune source vidéo
+
+```
+subtrad demo
+```
+
+Le programme traduit une scène de 2 minutes en français parlé (avec des expressions imagées
+comme « poser un lapin » ou « c'est la fin des haricots »), affiche dans le Terminal chaque
+phrase avec sa traduction, puis ouvre mpv sur un écran uni avec les sous-titres traduits.
+C'est le meilleur moyen de juger la qualité de l'indonésien et la synchronisation.
+
+- `subtrad demo --sans-lecture` affiche seulement le tableau original / traduction.
+- `subtrad demo --modele claude-haiku-5-5` essaie un modèle beaucoup moins cher (voir
+  « Coût » plus bas) pour comparer la qualité.
+
 ## Étape 6 : utiliser le programme
 
 **Règle importante :** mets toujours l'adresse entre guillemets `"..."`. Sans eux, le Terminal
@@ -140,6 +155,24 @@ subtrad traduire "mon_fichier.srt"
 ```
 
 Le résultat est écrit à côté, dans un fichier `mon_fichier.id.srt`.
+
+## Coût : voir ce que chaque traduction a coûté
+
+À la fin de chaque traduction, le programme affiche une ligne du type :
+`coût estimé : 0,031 $, 22 requêtes, 40 000 tokens envoyés et 30 000 reçus`.
+C'est une estimation, à comparer avec console.anthropic.com.
+
+Le modèle par défaut est `claude-sonnet-5-5`. Pour payer environ 20 fois moins, ajoute
+`--modele claude-haiku-5-5` à la commande : teste d'abord avec `subtrad demo` et fais juger le
+résultat par une personne qui parle indonésien.
+
+## Mettre à jour le programme
+
+Quand je corrige ou améliore le programme, refais ceci :
+1. Retélécharge le ZIP (étape 1) et décompresse-le.
+2. Dans le Terminal : `cd ` (avec une espace), glisse le **nouveau** dossier `iptv-subtrad`
+   dans la fenêtre, puis Entrée.
+3. Tape `pipx install --force .` (n'oublie pas le point) et Entrée.
 
 ## Dans mpv
 

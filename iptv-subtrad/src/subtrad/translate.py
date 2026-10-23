@@ -15,6 +15,13 @@ DEFAULT_MODEL = "claude-sonnet-5-5"
 
 log = logging.getLogger(__name__)
 
+# Prix en dollars par million de tokens (entrée, sortie), pour estimer le coût affiché.
+PRICES = {
+    "claude-haiku-5-5": (0.10, 0.50),
+    "claude-sonnet-5-5": (2.00, 10.00),
+    "claude-opus-5-5": (4.00, 20.00),
+}
+
 LANGUAGE_NAMES = {
     "fr": "French",
     "en": "English",
@@ -83,6 +90,7 @@ class ClaudeTranslator:
         self.source, self.target, self.model, self.effort = source, target, model, effort
         self.client = client or anthropic.Anthropic()
         self.namespace = f"claude:{model}:{source}>{target}"
+        self.calls = self.input_tokens = self.output_tokens = 0
         self.system = SYSTEM_PROMPT.format(
             source=LANGUAGE_NAMES.get(source, source),
             target=LANGUAGE_NAMES.get(target, target),
@@ -108,6 +116,12 @@ class ClaudeTranslator:
             messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
         )
 
+        usage = getattr(response, "usage", None)
+        if usage:
+            self.calls += 1
+            self.input_tokens += usage.input_tokens or 0
+            self.output_tokens += usage.output_tokens or 0
+
         if response.stop_reason in ("refusal", "max_tokens"):
             if len(texts) == 1:
                 if response.stop_reason == "max_tokens":
@@ -130,6 +144,28 @@ class ClaudeTranslator:
         if missing:
             raise TranslationError(f"Répliques non traduites : {missing}")
         return [by_id[i] for i in range(len(texts))]
+
+
+    def estimated_cost(self) -> float | None:
+        """Coût estimé en dollars, None si le modèle n'est pas dans la grille de prix."""
+        if self.model not in PRICES:
+            return None
+        price_in, price_out = PRICES[self.model]
+        return (self.input_tokens * price_in + self.output_tokens * price_out) / 1_000_000
+
+    def usage_summary(self) -> str:
+        if not self.calls:
+            return "aucune requête envoyée (tout venait du cache)"
+
+        def fmt(n: int) -> str:
+            return f"{n:,}".replace(",", "\u202f")
+
+        cost = self.estimated_cost()
+        price = f"coût estimé : {cost:.3f} $".replace(".", ",") + ", " if cost is not None else ""
+        return (
+            f"{price}{self.calls} requêtes, "
+            f"{fmt(self.input_tokens)} tokens envoyés et {fmt(self.output_tokens)} reçus"
+        )
 
 
 def translate_cues(
