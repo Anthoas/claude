@@ -38,6 +38,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import androidx.tv.material3.Button
@@ -119,7 +120,17 @@ fun PlayerScreen(video: VideoDetails, subtitles: File, onExit: () -> Unit) {
                     this.player = player
                     keepScreenOn = true
                     setShowSubtitleButton(true)
-                    subtitleView?.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 1.15f)
+                    subtitleView?.apply {
+                        setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 1.15f)
+                        // Texte blanc cerné de noir, sans fond : comme VLC et mpv sur le Mac.
+                        setStyle(
+                            CaptionStyleCompat(
+                                android.graphics.Color.WHITE, android.graphics.Color.TRANSPARENT,
+                                android.graphics.Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                                android.graphics.Color.BLACK, null,
+                            ),
+                        )
+                    }
                     isFocusable = true
                     requestFocus()
                 }
