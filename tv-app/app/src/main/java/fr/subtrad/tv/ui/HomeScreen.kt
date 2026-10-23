@@ -63,6 +63,19 @@ class HomeState(private val scope: CoroutineScope, private val prefs: Prefs) {
         private set
     var lastOpened = -1 // ligne à qui rendre le focus au retour d'une vidéo
     val recent = mutableStateListOf<String>().apply { addAll(prefs.recentSearches) }
+    /** Catalogue Xtream Codes : null = pas encore vérifié, false = absent (listes simples). */
+    var catalog by mutableStateOf<Boolean?>(null)
+        private set
+    val seriesGrid = CatalogState(scope, "series")
+    val moviesGrid = CatalogState(scope, "movie")
+
+    /** Grille de l'onglet affiché (null : onglet « prêtes » ou pas de catalogue). */
+    fun grid(): CatalogState? = when {
+        catalog != true -> null
+        tab == 1 -> moviesGrid
+        tab == 2 -> seriesGrid
+        else -> null
+    }
     /** Préparations en cours sur le Mac, par vidéo (suivies même fiche fermée). */
     val preparing = mutableStateMapOf<Int, fr.subtrad.tv.Job>()
 
@@ -94,10 +107,17 @@ class HomeState(private val scope: CoroutineScope, private val prefs: Prefs) {
 
     fun attach(c: SubtradClient) {
         client = c
+        seriesGrid.client = c
+        moviesGrid.client = c
     }
 
     fun reset(c: SubtradClient) {
-        client = c
+        attach(c)
+        catalog = null
+        for (g in listOf(seriesGrid, moviesGrid)) {
+            g.items.clear()
+            g.categories.clear()
+        }
         tab = TAB_READY
         items.clear()
         lastOpened = -1
@@ -105,14 +125,15 @@ class HomeState(private val scope: CoroutineScope, private val prefs: Prefs) {
 
     /** À chaque affichage de l'accueil : « Siap ditonton » est rechargé (une vidéo a pu être préparée). */
     fun onShown() {
-        if (tab == TAB_READY || items.isEmpty()) load()
+        if (catalog == null) scope.launch { catalog = runCatching { client?.catalogAvailable() }.getOrNull() ?: false }
+        if (tab == TAB_READY || (grid() == null && items.isEmpty())) load()
     }
 
     fun selectTab(index: Int) {
         if (index == tab) return
         tab = index
         lastOpened = -1
-        load()
+        if (grid() == null) load()
     }
 
     fun search() {
@@ -123,12 +144,14 @@ class HomeState(private val scope: CoroutineScope, private val prefs: Prefs) {
             recent.clear()
             recent.addAll(prefs.recentSearches)
         }
-        load()
+        val g = grid()
+        if (g != null) g.search(query) else load()
     }
 
     fun loadMore() = load(append = true)
 
     fun markReady(id: Int) {
+        moviesGrid.markReady(id)
         val i = items.indexOfFirst { it.id == id }
         if (i >= 0) items[i] = items[i].copy(ready = true)
     }
@@ -172,7 +195,12 @@ class HomeState(private val scope: CoroutineScope, private val prefs: Prefs) {
 }
 
 @Composable
-fun HomeScreen(state: HomeState, onOpen: (VideoItem) -> Unit, onSettings: () -> Unit) {
+fun HomeScreen(
+    state: HomeState,
+    onOpen: (VideoItem) -> Unit,
+    onOpenPoster: (fr.subtrad.tv.Poster) -> Unit,
+    onSettings: () -> Unit,
+) {
     val tabFocus = remember { FocusRequester() }
     val rowFocus = remember { FocusRequester() }
     val tabs = listOf(R.string.tab_ready, R.string.tab_films, R.string.tab_series)
@@ -219,6 +247,12 @@ fun HomeScreen(state: HomeState, onOpen: (VideoItem) -> Unit, onSettings: () -> 
                     OutlinedButton(onClick = { state.searchRecent(q) }) { Text(q, maxLines = 1) }
                 }
             }
+        }
+
+        val grid = state.grid()
+        if (grid != null) {
+            PosterGrid(grid, state.preparing, onOpenPoster)
+            return@Column
         }
 
         val status = when {

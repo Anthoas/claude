@@ -24,7 +24,8 @@ import java.io.File
 sealed interface Screen {
     data object Setup : Screen
     data object Home : Screen
-    data class Detail(val id: Int, val name: String) : Screen
+    data class Detail(val id: Int, val name: String, val info: DetailInfo? = null) : Screen
+    data class Series(val seriesId: Int, val name: String) : Screen
     data class Player(val video: VideoDetails, val subtitles: File) : Screen
 }
 
@@ -35,6 +36,7 @@ fun SubtradApp(prefs: Prefs) {
     val scope = rememberCoroutineScope()
     // La liste et la recherche survivent à l'ouverture d'une vidéo.
     val home = remember { HomeState(scope, prefs) }
+    val seriesMemory = remember { mutableMapOf<Int, SeriesMemory>() }
 
     fun push(screen: Screen) = stack.add(screen)
     fun pop() = stack.removeAt(stack.lastIndex)
@@ -59,16 +61,30 @@ fun SubtradApp(prefs: Prefs) {
                     HomeScreen(
                         state = home,
                         onOpen = { item -> push(Screen.Detail(item.id, item.name)) },
+                        onOpenPoster = { p ->
+                            if (p.seriesId != null) push(Screen.Series(p.seriesId, p.name))
+                            else push(Screen.Detail(p.id, p.name, DetailInfo(null, "", p.vodId)))
+                        },
                         onSettings = { push(Screen.Setup) },
                     )
                 }
                 is Screen.Detail -> client?.let { c ->
                     DetailScreen(
-                        client = c, id = screen.id, name = screen.name,
+                        client = c, id = screen.id, name = screen.name, info = screen.info,
                         onReady = home::markReady,
                         onDeleted = { id -> home.markDeleted(id); pop() },
                         onWatch = { video, file -> push(Screen.Player(video, file)) },
                         onBack = { pop() },
+                    )
+                }
+                is Screen.Series -> client?.let { c ->
+                    SeriesScreen(
+                        client = c, seriesId = screen.seriesId, name = screen.name,
+                        memory = seriesMemory.getOrPut(screen.seriesId) { SeriesMemory() },
+                        preparing = home.preparing,
+                        onEpisode = { episode, sheet, label ->
+                            push(Screen.Detail(episode.id, sheet.name, DetailInfo(sheet, label, null)))
+                        },
                     )
                 }
                 is Screen.Player -> PlayerScreen(screen.video, screen.subtitles, onExit = { pop() })

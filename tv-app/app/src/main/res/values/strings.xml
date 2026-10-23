@@ -45,4 +45,9 @@
     <string name="player_error">Video tidak bisa diputar: %1$s</string>
     <string name="error_network">Mac tidak bisa dihubungi. Pastikan Mac menyala, subtrad gui terbuka, dan alamatnya benar.</string>
     <string name="error_code">Kode salah. Periksa kode di Mac (⚙ Réglages).</string>
+    <string name="all_categories">Semua</string>
+    <string name="season_label">Musim %1$d</string>
+    <string name="season_specials">Spesial</string>
+    <string name="episode_label">Episode %1$d</string>
+    <string name="episode_unavailable">Tidak tersedia</string>
 </resources>

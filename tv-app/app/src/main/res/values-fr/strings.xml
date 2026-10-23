@@ -44,4 +44,9 @@
     <string name="player_error">Lecture impossible : %1$s</string>
     <string name="error_network">Impossible de joindre le Mac. Vérifie qu\'il est allumé, que subtrad gui est ouvert et que l\'adresse est bonne.</string>
     <string name="error_code">Code incorrect. Vérifie le code sur le Mac (⚙ Réglages).</string>
+    <string name="all_categories">Toutes</string>
+    <string name="season_label">Saison %1$d</string>
+    <string name="season_specials">Épisodes spéciaux</string>
+    <string name="episode_label">Épisode %1$d</string>
+    <string name="episode_unavailable">Indisponible</string>
 </resources>

@@ -33,6 +33,50 @@ data class VideoDetails(
 
 data class CheckResult(val ok: Boolean, val message: String)
 
+// --- Catalogue Xtream Codes (affiches, séries par saison) ---
+
+data class Category(val id: String, val name: String, val count: Int)
+
+/** Une affiche de la grille : une série (seriesId) ou un film (vodId, id = vidéo de la playlist). */
+data class Poster(
+    val seriesId: Int?,
+    val vodId: Int?,
+    val id: Int,
+    val name: String,
+    val cover: String,
+    val year: String,
+    val rating: String,
+    val ready: Boolean,
+)
+
+data class PosterPage(val total: Int, val items: List<Poster>)
+
+data class Episode(
+    val id: Int, // vidéo de la playlist, -1 si absente
+    val number: Int,
+    val title: String,
+    val duration: String,
+    val airDate: String,
+    val image: String,
+    val ready: Boolean,
+)
+
+data class Season(val number: Int, val name: String, val episodes: List<Episode>)
+
+/** Fiche d'une série ou d'un film (seasons vide pour un film). */
+data class Sheet(
+    val name: String,
+    val cover: String,
+    val backdrop: String,
+    val plot: String,
+    val genre: String,
+    val year: String,
+    val rating: String,
+    val duration: String,
+    val id: Int, // film : vidéo de la playlist
+    val seasons: List<Season>,
+)
+
 /** Une préparation (récupération et traduction) qui tourne sur le Mac. */
 data class Job(
     val id: String,
@@ -109,6 +153,56 @@ class SubtradClient(address: String, private val code: String) {
     }
 
     suspend fun cancel(id: String): Job = job(postJson("/tele/api/cancel", JSONObject().put("id", id)))
+
+    // --- catalogue ---
+
+    suspend fun catalogAvailable(): Boolean = getJson("/tele/api/catalog").optBoolean("available")
+
+    suspend fun categories(type: String): List<Category> = withContext(Dispatchers.IO) {
+        val array = org.json.JSONArray(requestText("/tele/api/catalog/categories?type=${enc(type)}"))
+        (0 until array.length()).map {
+            val o = array.getJSONObject(it)
+            Category(o.getString("id"), o.getString("name"), o.optInt("count"))
+        }
+    }
+
+    suspend fun posters(type: String, category: String, query: String, offset: Int, limit: Int = 60): PosterPage {
+        val path = if (type == "series") "series" else "movies"
+        val o = getJson("/tele/api/catalog/$path?category=${enc(category)}&q=${enc(query)}&offset=$offset&limit=$limit")
+        val items = o.getJSONArray("items")
+        return PosterPage(o.getInt("total"), (0 until items.length()).map { i ->
+            val p = items.getJSONObject(i)
+            Poster(
+                seriesId = if (p.has("series_id")) p.optInt("series_id") else null,
+                vodId = if (p.has("vod_id")) p.optInt("vod_id") else null,
+                id = p.optInt("id", -1), name = p.optString("name"), cover = p.optString("cover"),
+                year = p.optString("year"), rating = p.optString("rating"), ready = p.optBoolean("ready"),
+            )
+        })
+    }
+
+    suspend fun seriesSheet(seriesId: Int): Sheet {
+        val o = getJson("/tele/api/catalog/series/info?id=$seriesId")
+        val seasons = o.getJSONArray("seasons")
+        return sheet(o, (0 until seasons.length()).map { i ->
+            val s = seasons.getJSONObject(i)
+            val eps = s.getJSONArray("episodes")
+            Season(s.optInt("season"), s.optString("name"), (0 until eps.length()).map { j ->
+                val e = eps.getJSONObject(j)
+                Episode(e.optInt("id", -1), e.optInt("episode"), e.optString("title"), e.optString("duration"),
+                    e.optString("air_date"), e.optString("image"), e.optBoolean("ready"))
+            })
+        })
+    }
+
+    suspend fun movieSheet(vodId: Int): Sheet = sheet(getJson("/tele/api/catalog/movie?id=$vodId"), emptyList())
+
+    private fun sheet(o: JSONObject, seasons: List<Season>) = Sheet(
+        name = o.optString("name"), cover = o.optString("cover"), backdrop = o.optString("backdrop"),
+        plot = o.optString("plot"), genre = o.optString("genre"), year = o.optString("year"),
+        rating = o.optString("rating"), duration = o.optString("duration"), id = o.optInt("id", -1),
+        seasons = seasons,
+    )
 
     /** Télécharge le .srt traduit dans `target` (le lecteur le lit ensuite depuis la télé). */
     suspend fun downloadSubtitles(id: Int, target: File): File = withContext(Dispatchers.IO) {

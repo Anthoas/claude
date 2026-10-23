@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ import androidx.tv.material3.Text
 import fr.subtrad.tv.CheckResult
 import fr.subtrad.tv.Job
 import fr.subtrad.tv.R
+import fr.subtrad.tv.Sheet
 import fr.subtrad.tv.SubtradClient
 import fr.subtrad.tv.VideoDetails
 import kotlinx.coroutines.delay
@@ -39,6 +41,7 @@ fun DetailScreen(
     client: SubtradClient,
     id: Int,
     name: String,
+    info: DetailInfo?,
     onReady: (Int) -> Unit,
     onDeleted: (Int) -> Unit,
     onWatch: (VideoDetails, File) -> Unit,
@@ -53,6 +56,8 @@ fun DetailScreen(
     var error by remember { mutableStateOf<Throwable?>(null) }
     var confirmDelete by remember { mutableStateOf(false) } // suppression : il faut appuyer deux fois
     val mainButton = remember { FocusRequester() }
+    var movie by remember { mutableStateOf<Sheet?>(null) }
+    LaunchedEffect(info?.vodId) { info?.vodId?.let { movie = runCatching { client.movieSheet(it) }.getOrNull() } }
 
     fun action(label: Int, block: suspend () -> Unit) {
         if (busy != null) return
@@ -106,11 +111,16 @@ fun DetailScreen(
     }
 
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 96.dp, vertical = 48.dp),
+        Modifier.fillMaxSize().padding(horizontal = 64.dp, vertical = 36.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        Text(name, style = MaterialTheme.typography.headlineLarge)
-        details?.let { Text(it.group, color = Color(0xFF9CA3AF)) }
+        val header = movie ?: info?.sheet
+        if (header != null) {
+            SheetHeader(header, info?.subtitle ?: "", Modifier.height(200.dp))
+        } else {
+            Text(name, style = MaterialTheme.typography.headlineLarge)
+            details?.let { Text(it.group, color = Color(0xFF9CA3AF)) }
+        }
 
         val video = details
         val current = job
@@ -202,3 +212,6 @@ fun DetailScreen(
         error?.let { Text(errorMessage(it), color = Color(0xFFFCA5A5)) }
     }
 }
+
+/** En-tête d'une fiche venue du catalogue : fiche de la série (épisode) ou numéro du film. */
+data class DetailInfo(val sheet: Sheet?, val subtitle: String, val vodId: Int?)
