@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bahasa Indonesia (bahasa bawaan aplikasi). -->
+<resources>
+    <string name="app_name">Subtrad TV</string>
+    <string name="setup_title">Hubungkan ke Mac</string>
+    <string name="setup_help">Di Mac, buka subtrad gui, lalu ⚙ Réglages → Regarder sur la télé. Alamat dan kode muncul di sana.</string>
+    <string name="setup_address">Alamat Mac (contoh 192.168.1.35:8766)</string>
+    <string name="setup_code">Kode 6 angka</string>
+    <string name="setup_connect">Hubungkan</string>
+    <string name="setup_checking">Menghubungkan…</string>
+    <string name="tab_ready">Siap ditonton</string>
+    <string name="tab_films">Film</string>
+    <string name="tab_series">Serial</string>
+    <string name="search_hint">Cari judul…</string>
+    <string name="search_button">Cari</string>
+    <string name="settings_button">Pengaturan</string>
+    <string name="load_more">Muat lebih banyak</string>
+    <string name="results_count">%1$d hasil</string>
+    <string name="nothing_ready">Belum ada video yang siap. Cari film atau serial, lalu pilih \"Siapkan\".</string>
+    <string name="no_results">Tidak ada hasil.</string>
+    <string name="badge_ready">✓ Siap</string>
+    <string name="loading">Memuat…</string>
+    <string name="error_prefix">Kesalahan: %1$s</string>
+    <string name="retry">Coba lagi</string>
+    <string name="watch">▶ Tonton</string>
+    <string name="check">Cek subtitle</string>
+    <string name="prepare">Siapkan (terjemahkan)</string>
+    <string name="cancel">Batal</string>
+    <string name="back">Kembali</string>
+    <string name="status_ready">Subtitle bahasa Indonesia sudah siap.</string>
+    <string name="status_not_ready">Belum diterjemahkan. Mac akan mengambil dan menerjemahkan subtitle (beberapa menit).</string>
+    <string name="phase_fetch">Mengambil subtitle di Mac…</string>
+    <string name="phase_translate">Menerjemahkan…</string>
+    <string name="progress_lines">%1$d / %2$d baris diterjemahkan</string>
+    <string name="progress_lines_open">%1$d baris diterjemahkan (%2$d ditemukan sejauh ini)</string>
+    <string name="cancelled">Dibatalkan.</string>
+    <string name="downloading_subs">Mengunduh subtitle…</string>
+    <string name="player_error">Video tidak bisa diputar: %1$s</string>
+    <string name="error_network">Mac tidak bisa dihubungi. Pastikan Mac menyala, subtrad gui terbuka, dan alamatnya benar.</string>
+    <string name="error_code">Kode salah. Periksa kode di Mac (⚙ Réglages).</string>
+</resources>

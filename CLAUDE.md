@@ -35,8 +35,9 @@ est un **lecteur** piloté à la télécommande (Kotlin, Compose for TV, Media3/
    accès sur le Wi-Fi de la maison seulement, code à 6 chiffres (en-tête `X-Subtrad-Code`),
    activé dans ⚙ Réglages. Testé depuis le Mac ; la télé « ping » le Mac. L'appel HTTP depuis la
    télé sera testé par l'application. Playlist réelle : ~507 000 entrées (`/tele/api/ready` ≈ 2 s).
-2. Écrire l'application (liste, recherche, lecture avec la piste « Indonésien (traduit) »
-   sélectionnée d'office, navigation au clavier directionnel).
+2. ✅ Écrite dans `tv-app/` (voir `tv-app/README.md`), **jamais compilée** à ce stade : attendre
+   des erreurs de compilation à corriger à l'étape 3. Liste, recherche, préparation, lecture avec la
+   piste « Indonésien (traduit) » sélectionnée d'office, navigation au clavier directionnel.
 3. Compiler sur le Mac (JDK 17 + outils en ligne de commande Android, pas besoin d'Android Studio),
    installer par `adb install`, tester sur la vraie télé, corriger.
 

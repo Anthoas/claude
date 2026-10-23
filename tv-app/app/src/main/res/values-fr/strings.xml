@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Subtrad TV</string>
+    <string name="setup_title">Se connecter au Mac</string>
+    <string name="setup_help">Sur le Mac, ouvre subtrad gui, puis ⚙ Réglages → Regarder sur la télé : l\'adresse et le code s\'y affichent.</string>
+    <string name="setup_address">Adresse du Mac (ex. 192.168.1.35:8766)</string>
+    <string name="setup_code">Code à 6 chiffres</string>
+    <string name="setup_connect">Se connecter</string>
+    <string name="setup_checking">Connexion…</string>
+    <string name="tab_ready">Prêtes à regarder</string>
+    <string name="tab_films">Films</string>
+    <string name="tab_series">Séries</string>
+    <string name="search_hint">Chercher un titre…</string>
+    <string name="search_button">Chercher</string>
+    <string name="settings_button">Réglages</string>
+    <string name="load_more">Afficher plus</string>
+    <string name="results_count">%1$d résultats</string>
+    <string name="nothing_ready">Aucune vidéo prête. Cherche un film ou une série, puis choisis « Préparer ».</string>
+    <string name="no_results">Aucun résultat.</string>
+    <string name="badge_ready">✓ Prêt</string>
+    <string name="loading">Chargement…</string>
+    <string name="error_prefix">Erreur : %1$s</string>
+    <string name="retry">Réessayer</string>
+    <string name="watch">▶ Regarder</string>
+    <string name="check">Vérifier les sous-titres</string>
+    <string name="prepare">Préparer (traduire)</string>
+    <string name="cancel">Annuler</string>
+    <string name="back">Retour</string>
+    <string name="status_ready">Les sous-titres indonésiens sont prêts.</string>
+    <string name="status_not_ready">Pas encore traduit. Le Mac va récupérer et traduire les sous-titres (quelques minutes).</string>
+    <string name="phase_fetch">Récupération des sous-titres sur le Mac…</string>
+    <string name="phase_translate">Traduction…</string>
+    <string name="progress_lines">%1$d / %2$d répliques traduites</string>
+    <string name="progress_lines_open">%1$d répliques traduites (%2$d trouvées pour l\'instant)</string>
+    <string name="cancelled">Annulé.</string>
+    <string name="downloading_subs">Téléchargement des sous-titres…</string>
+    <string name="player_error">Lecture impossible : %1$s</string>
+    <string name="error_network">Impossible de joindre le Mac. Vérifie qu\'il est allumé, que subtrad gui est ouvert et que l\'adresse est bonne.</string>
+    <string name="error_code">Code incorrect. Vérifie le code sur le Mac (⚙ Réglages).</string>
+</resources>
