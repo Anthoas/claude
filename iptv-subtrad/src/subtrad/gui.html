@@ -172,6 +172,13 @@
     <option value="off">Ne rien faire</option>
   </select>
   <div id="whisper-hint" class="hint"></div>
+  <label for="tele">Regarder sur la télé</label>
+  <select id="tele">
+    <option value="off">Désactivé</option>
+    <option value="on">Activé (Wi-Fi de la maison seulement, protégé par un code)</option>
+  </select>
+  <div id="tele-hint" class="hint"></div>
+  <button id="new-tele-code" type="button" class="hidden">Changer le code de la télé</button>
   <label>Playlist</label>
   <button id="change-playlist" type="button">Changer de playlist…</button>
   <div class="buttons">
@@ -456,7 +463,8 @@ function renderJobs(jobs) {
       el("div", { className: "title" }, el("span", { textContent: job.title }), close));
     const active = job.state === "running" || job.state === "playing";
     if (active) {
-      const where = job.state === "playing" && job.player ? `Lecture dans ${job.player}` : PHASES[job.phase - 1];
+      const where = (job.state === "playing" && job.player ? `Lecture dans ${job.player}` : PHASES[job.phase - 1])
+                    + (job.target === "tele" ? " · pour la télé" : "");
       card.append(el("div", { className: "phase", textContent:
         `Étape ${job.phase}/3 · ${where} · depuis ${elapsedText(job.started_at)}` }));
       card.append(el("div", {}, job.state === "running" ? el("span", { className: "spinner" }) : null, job.step));
@@ -502,6 +510,8 @@ function openSettings() {
   $("#whisper-hint").textContent = s.whisper_backend
     ? `Whisper est installé (moteur ${s.whisper_backend}). Gratuit, mais plus lent que de vrais sous-titres.`
     : "Whisper n'est pas installé : dans le Terminal, tape « brew install whisper-cpp » puis relance subtrad gui.";
+  $("#tele").value = s.tele;
+  showTele(s);
   $("#depuis").value = s.depuis;
   $("#vers").value = s.vers;
   $("#api-key").value = "";
@@ -512,6 +522,26 @@ function openSettings() {
   $("#settings").showModal();
 }
 
+function showTele(s) {
+  const tv = s.tele_status || {};
+  let hint = "Permet à l'application de la télé d'utiliser ce Mac. Le Mac doit rester allumé, avec subtrad gui ouvert.";
+  if (s.tele === "on" && tv.active) {
+    hint = `Sur la télé, saisis l'adresse ${tv.address || "(Mac non connecté au Wi-Fi ?)"} et le code ${s.tele_code}.`;
+  } else if (s.tele === "on" && tv.error) {
+    hint = `Accès télé impossible : ${tv.error}`;
+  }
+  $("#tele-hint").textContent = hint;
+  $("#new-tele-code").classList.toggle("hidden", !(s.tele === "on" && tv.active));
+}
+
+$("#new-tele-code").addEventListener("click", async () => {
+  try {
+    state.settings = { ...state.settings, ...await api("/api/settings", { nouveau_code_tele: true }) };
+    showTele(state.settings);
+  } catch (e) {
+    alert(e.message);
+  }
+});
 $("#open-settings").addEventListener("click", openSettings);
 $("#cancel-settings").addEventListener("click", () => $("#settings").close());
 $("#save-settings").addEventListener("click", async () => {
@@ -519,9 +549,13 @@ $("#save-settings").addEventListener("click", async () => {
     state.settings = { ...state.settings, ...await api("/api/settings", {
       api_key: $("#api-key").value.trim(), model: $("#model").value,
       depuis: $("#depuis").value, vers: $("#vers").value,
-      lecteur: $("#lecteur").value, whisper: $("#whisper").value,
+      lecteur: $("#lecteur").value, whisper: $("#whisper").value, tele: $("#tele").value,
     }) };
-    $("#settings").close();
+    if (state.settings.tele === "on") {
+      showTele(state.settings);  // le dialogue reste ouvert : il affiche l'adresse et le code
+    } else {
+      $("#settings").close();
+    }
   } catch (e) {
     alert(e.message);
   }

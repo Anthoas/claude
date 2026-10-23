@@ -52,6 +52,7 @@ PLAYER_NAMES = {"vlc": "VLC", "mpv": "mpv"}
 LANGUAGE_LABELS = {"id": "Indonésien", "en": "Anglais", "fr": "Français"}
 TRANSLATION_WORKERS = 4  # lots envoyés à Claude en même temps
 READY_CUES = 10  # démarrage rapide : répliques traduites avant d'ouvrir la vidéo
+TV_READY_STEP = "Prêt : la vidéo peut être regardée sur la télé."
 
 
 def config_dir() -> Path:
@@ -70,8 +71,10 @@ class Settings:
     passe et la clé Claude en est un) : fichier lisible par l'utilisateur seul."""
 
     DEFAULTS = {"playlist_source": "", "api_key": "", "model": DEFAULT_MODEL,
-                "depuis": "fr", "vers": "id", "lecteur": "vlc", "whisper": "on"}
-    CHOICES = {"lecteur": set(PLAYERS), "whisper": {"on", "off"}, "model": set(MODELS)}
+                "depuis": "fr", "vers": "id", "lecteur": "vlc", "whisper": "on",
+                "tele": "off", "tele_code": ""}
+    CHOICES = {"lecteur": set(PLAYERS), "whisper": {"on", "off"}, "model": set(MODELS),
+               "tele": {"on", "off"}}
 
     def __init__(self, directory: Path):
         self.path = directory / "config.json"
@@ -95,6 +98,16 @@ class Settings:
     def api_key(self) -> str:
         return self.data["api_key"] or os.environ.get("ANTHROPIC_API_KEY", "")
 
+    def tv_code(self) -> str:
+        """Code à 6 chiffres que la télé doit donner ; créé au premier besoin."""
+        if not self.data["tele_code"]:
+            self.new_tv_code()
+        return self.data["tele_code"]
+
+    def new_tv_code(self) -> str:
+        self.update(tele_code=f"{secrets.randbelow(10**6):06d}")
+        return self.data["tele_code"]
+
     def public(self) -> dict:
         return {
             "model": self.data["model"], "depuis": self.data["depuis"],
@@ -102,7 +115,8 @@ class Settings:
             "api_key_from_env": not self.data["api_key"] and bool(self.api_key()),
             "has_playlist_source": bool(self.data["playlist_source"]),
             "models": MODELS, "lecteur": self.data["lecteur"], "players": PLAYERS,
-            "whisper": self.data["whisper"],
+            "whisper": self.data["whisper"], "tele": self.data["tele"],
+            "tele_code": self.tv_code() if self.data["tele"] == "on" else "",
         }
 
 
@@ -185,6 +199,7 @@ class Job:
     channel_id: int = -1  # entrée de la liste concernée
     channel_url: str = field(default="", repr=False)  # jamais envoyé à la page (identifiants)
     saved: bool = False  # les sous-titres traduits sont gardés : la prochaine ouverture sera immédiate
+    target: str = "mac"  # mac = lecture sur ce Mac ; tele = préparation pour la télé (aucun lecteur ici)
 
 
 def job_public(job: Job) -> dict:
@@ -225,6 +240,7 @@ class GuiApp:
         self._transcriber = None
         self._transcriber_factory = transcriber_factory or transcribe.make_transcriber
         self.whisper_backend = whisper_backend or transcribe.backend_name
+        self.tv = None  # TvAccess, branché par run_gui
         if playlist_cache.exists():
             self.library.load_text(playlist_cache.read_text(encoding="utf-8", errors="replace"))
 
@@ -285,16 +301,66 @@ class GuiApp:
         self.store.forget(*self._store_args(self.library.get(index)))
         return {"ready": False}
 
+    # --- télé ---
+
+    def tv_status(self) -> dict:
+        return self.tv.status() if self.tv else {"active": False, "error": "", "address": ""}
+
+    def apply_tv(self) -> None:
+        if self.tv:
+            self.tv.apply(self.settings["tele"] == "on")
+
+    def ready_videos(self, limit: int = 200) -> dict:
+        """Les vidéos déjà traduites (prêtes à regarder sur la télé)."""
+        with self.library._lock:
+            channels = list(enumerate(self.library.channels))
+        names = self.store.translated_names()
+        candidates = [(i, c) for i, c in channels if c.kind != "direct" and names
+                      and self.store.translation_path(*self._store_args(c)).name in names]
+        items = [{"id": i, "name": c.name, "group": c.group, "logo": c.logo, "kind": c.kind,
+                  "kind_label": KIND_LABELS[c.kind], "ready": True}
+                 for i, c in candidates if self.is_ready(c)]
+        return {"total": len(items), "items": items[:limit]}
+
+    def video_for_tv(self, index: int) -> dict:
+        """Tout ce qu'il faut à la télé pour lire une vidéo, adresse du flux comprise : cette
+        réponse ne part que vers un appareil de la maison qui a donné le bon code."""
+        channel = self.library.get(index)
+        return {"id": index, "name": channel.name, "group": channel.group, "logo": channel.logo,
+                "kind": channel.kind, "ready": self.is_ready(channel), "url": channel.url,
+                "subtitle_label": self.subtitle_label(), "language": self.settings["vers"]}
+
+    def subtitles_for_tv(self, index: int) -> Path | None:
+        return self.store.translation_file(*self._store_args(self.library.get(index)))
+
+    def prepare(self, index: int) -> dict:
+        """Récupère et traduit sur ce Mac, pour la télé. Une préparation déjà en cours pour la
+        même vidéo est réutilisée plutôt que relancée (et payée) une seconde fois."""
+        for job in self.jobs.values():
+            if job.target == "tele" and job.channel_id == index and job.state == "running":
+                return job_public(job)
+        return job_public(self.watch(index, target="tele"))
+
+    def job_for_tv(self, job_id: str) -> dict:
+        job = self.jobs.get(job_id)
+        if job is None or job.target != "tele":
+            raise KeyError("Préparation introuvable.")
+        return job_public(job)
+
+    def cancel_for_tv(self, job_id: str) -> dict:
+        self.job_for_tv(job_id)
+        return job_public(self.cancel(job_id))
+
     # --- sous-titres et lecture ---
 
     def check(self, index: int) -> dict:
         return asdict(check_subtitles(self.library.get(index).url, self.settings["depuis"],
                                       self.hls, whisper_available=self._whisper_enabled()))
 
-    def watch(self, index: int) -> Job:
+    def watch(self, index: int, target: str = "mac") -> Job:
         channel = self.library.get(index)
         job = Job(id=uuid.uuid4().hex[:8], title=channel.name, started_at=time.time(),
-                  channel_id=index, channel_url=channel.url)
+                  channel_id=index, channel_url=channel.url, target=target)
         self.jobs[job.id] = job
         # (annulation demandée, arrêt de tout travail en cours : annulation ou vidéo fermée)
         self._events[job.id] = (threading.Event(), threading.Event())
@@ -322,8 +388,14 @@ class GuiApp:
         try:
             ready = self.store.translation_file(*self._store_args(channel))
             if ready:  # déjà fait : rien à récupérer, rien à traduire, rien à payer
-                self._play_saved(job, channel, ready, cancelled)
-                job.state, job.step = "done", "Terminé."
+                if job.target == "tele":
+                    job.found = job.translated = len(load_subtitles(ready))
+                    job.fetch_done, job.saved = True, True
+                    job.note = "Sous-titres déjà prêts (traduits lors d'un essai précédent) : aucun coût."
+                    job.state, job.step = "done", TV_READY_STEP
+                else:
+                    self._play_saved(job, channel, ready, cancelled)
+                    job.state, job.step = "done", "Terminé."
                 return
             translator = self.make_translator(self.settings)
             saved = self.store.load_source(channel.url, self.settings["depuis"])
@@ -338,6 +410,12 @@ class GuiApp:
                     transcriber_factory=self._get_transcriber if self._whisper_enabled() else None,
                 )
             cache = self.make_cache()
+            if job.target == "tele":
+                if source.live_track:
+                    raise NoSubtitles("Les directs ne sont pas encore possibles sur la télé.")
+                self._translate_everything(job, source, translator, cache, halt)
+                job.state, job.step = "done", TV_READY_STEP
+                return
             if source.live_track:
                 self._play_live(job, channel, source, translator, cache, cancelled)
             elif self.settings["lecteur"] == "mpv":
@@ -358,7 +436,7 @@ class GuiApp:
             if translator is not None:
                 job.usage = translator.usage_summary()
 
-    def _subtitle_label(self) -> str:
+    def subtitle_label(self) -> str:
         """Nom de la piste dans le menu du lecteur, ex. « Indonésien (traduit) »."""
         vers = self.settings["vers"]
         return f"{LANGUAGE_LABELS.get(vers, vers)} (traduit)"
@@ -379,7 +457,7 @@ class GuiApp:
         job.state = "playing"
         job.step = f"Lecture en cours dans {PLAYER_NAMES[name]}."
         player = self._start_player(job, name, channel.url, subtitle=path, title=channel.name,
-                                    subtitle_label=self._subtitle_label())
+                                    subtitle_label=self.subtitle_label())
         player.wait()
         if cancelled.is_set():
             raise Cancelled()
@@ -425,6 +503,17 @@ class GuiApp:
 
     def _play_after_translation(self, job, channel, source: CueSource, translator, cache, halt):
         """VLC : tout est récupéré et traduit (en parallèle), puis la vidéo s'ouvre."""
+        translated = self._translate_everything(job, source, translator, cache, halt)
+        name = f"sous-titres.{self.settings['vers']}.srt"
+        sub_path = Path(tempfile.mkdtemp(prefix="subtrad-")) / name
+        save_subtitles(translated, sub_path)
+        player = self._start_player(job, "vlc", channel.url, subtitle=sub_path, title=channel.name,
+                                    subtitle_label=self.subtitle_label())
+        job.state, job.phase, job.step = "playing", 3, "Lecture en cours dans VLC."
+        player.wait()
+
+    def _translate_everything(self, job, source: CueSource, translator, cache, halt) -> list[Cue]:
+        """Récupère et traduit toutes les répliques (en parallèle), puis garde le résultat."""
         pipeline = self._pipeline(job, translator, cache, halt)
         originals: list[Cue] = []
         try:
@@ -440,13 +529,7 @@ class GuiApp:
             raise NoSubtitles("Aucune réplique trouvée dans ce fichier.")
         job.usage = translator.usage_summary()
         self._save_translation(job, translated, pipeline.failed)
-        name = f"sous-titres.{self.settings['vers']}.srt"
-        sub_path = Path(tempfile.mkdtemp(prefix="subtrad-")) / name
-        save_subtitles(translated, sub_path)
-        player = self._start_player(job, "vlc", channel.url, subtitle=sub_path, title=channel.name,
-                                    subtitle_label=self._subtitle_label())
-        job.state, job.phase, job.step = "playing", 3, "Lecture en cours dans VLC."
-        player.wait()
+        return translated
 
     def _play_progressive(self, job, channel, source: CueSource, translator, cache, cancelled, halt):
         """mpv : la vidéo démarre dès les premières répliques traduites ; la suite arrive
@@ -551,7 +634,7 @@ class _Handler(BaseHTTPRequestHandler):
             if (method, path) == ("GET", "/api/state"):
                 return self._json({**app.settings.public(), "count": len(app.library.channels),
                                    "whisper_backend": app.whisper_backend(),
-                                   "kinds": app.library.kinds()})
+                                   "kinds": app.library.kinds(), "tele_status": app.tv_status()})
             if (method, path) == ("GET", "/api/search"):
                 return self._json(app.search(
                     params.get("q", ""), params.get("kind", ""), params.get("group", ""),
@@ -566,11 +649,15 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._json(app.refresh_playlist())
             if (method, path) == ("POST", "/api/settings"):
                 values = {k: str(params[k]) for k in
-                          ("model", "depuis", "vers", "api_key", "lecteur", "whisper") if k in params}
+                          ("model", "depuis", "vers", "api_key", "lecteur", "whisper", "tele")
+                          if k in params}
                 if "api_key" in values and not values["api_key"]:
                     del values["api_key"]  # champ laissé vide : on garde la clé actuelle
                 app.settings.update(**values)
-                return self._json(app.settings.public())
+                if params.get("nouveau_code_tele"):
+                    app.settings.new_tv_code()
+                app.apply_tv()
+                return self._json({**app.settings.public(), "tele_status": app.tv_status()})
             if (method, path) == ("POST", "/api/check"):
                 return self._json(app.check(int(params["id"])))
             if (method, path) == ("POST", "/api/forget"):
@@ -606,12 +693,21 @@ def open_in_chrome(url: str) -> None:
     webbrowser.open(url)
 
 
-def run_gui(port: int = 8765, open_browser: bool = True) -> int:
+def run_gui(port: int = 8765, open_browser: bool = True, tv_port: int | None = None) -> int:
+    from .tele import TV_PORT, TvAccess
+
     settings = Settings(config_dir())
     app = GuiApp(settings, default_cache_path().parent / "playlist.m3u")
     server, _ = make_server(app, port)
+    app.tv = TvAccess(app, port=tv_port or TV_PORT)
+    app.apply_tv()
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(f"Interface ouverte sur {url}")
+    tv = app.tv_status()
+    if tv["active"]:
+        print(f"Accès télé ouvert sur le Wi-Fi de la maison : {tv['address']} (code dans ⚙ Réglages).")
+    elif tv["error"]:
+        print(f"Accès télé impossible : {tv['error']}")
     print("Laisse cette fenêtre du Terminal ouverte. Pour arrêter : Ctrl + C.")
     if open_browser:
         open_in_chrome(url)
@@ -620,5 +716,6 @@ def run_gui(port: int = 8765, open_browser: bool = True) -> int:
     except KeyboardInterrupt:
         print("\nArrêt de l'interface.")
     finally:
+        app.tv.stop()
         server.server_close()
     return 0

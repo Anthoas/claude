@@ -174,6 +174,18 @@ tu utilises la page ; pour tout arrêter, reviens dans le Terminal et fais **Ctr
 Le lien de la playlist et la clé Claude sont enregistrés uniquement sur ce Mac, dans des
 fichiers que toi seul peux lire.
 
+## Étape 6 bis : regarder sur la télé (application en préparation)
+
+Dans **⚙ Réglages**, choisis **Regarder sur la télé : Activé**, puis **Enregistrer**. La fenêtre
+affiche alors l'**adresse** du Mac (par exemple `192.168.1.35:8766`) et un **code à 6 chiffres** :
+ce sont eux qu'il faudra taper dans l'application de la télé (une seule fois).
+
+- Seuls les appareils de la maison peuvent s'en servir, et seulement avec le code. Ce n'est
+  jamais ouvert sur Internet. **Changer le code de la télé** le remplace si tu l'as donné à quelqu'un.
+- Le Mac doit rester **allumé** avec `subtrad gui` ouvert : c'est lui qui prépare et traduit.
+- Une vidéo préparée depuis la télé apparaît aussi dans les cartes de progression du Mac
+  (« pour la télé ») ; aucun lecteur ne s'ouvre sur le Mac.
+
 ## Étape 7 : les commandes du Terminal (pour aller plus loin)
 
 **Règle importante :** mets toujours l'adresse entre guillemets `"..."`. Sans eux, le Terminal

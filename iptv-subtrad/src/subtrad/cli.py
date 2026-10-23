@@ -193,7 +193,7 @@ def cmd_transcrire(args) -> int:
 def cmd_gui(args) -> int:
     from .gui import run_gui
 
-    return run_gui(port=args.port, open_browser=not args.sans_navigateur)
+    return run_gui(port=args.port, open_browser=not args.sans_navigateur, tv_port=args.port_tele)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -206,6 +206,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--port", type=int, default=8765, help="port local (défaut : 8765)")
     p.add_argument("--sans-navigateur", action="store_true",
                    help="ne pas ouvrir le navigateur automatiquement")
+    p.add_argument("--port-tele", type=int, default=8766,
+                   help="port de l'accès télé sur le Wi-Fi de la maison (défaut : 8766)")
     p.set_defaults(func=cmd_gui)
 
     p = sub.add_parser("transcrire", help="transcrire la voix d'une vidéo avec Whisper (sans traduire)")

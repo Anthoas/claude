@@ -103,6 +103,33 @@ elle-même, qui contient souvent identifiant et mot de passe). Une vidéo déjà
 aussitôt, sans clé ni coût ; seul un travail complet est gardé (ni annulation, ni lot en échec).
 Le badge « déjà traduit » et le bouton « Refaire » de la page s'appuient dessus.
 
+## Accès depuis la télé
+
+Activé dans ⚙ Réglages (« Regarder sur la télé »), `tele.py` ouvre un second serveur sur le port
+8766 (`subtrad gui --port-tele N` pour un autre), joignable depuis le Wi-Fi de la maison pour
+l'application Android TV. La page du Mac reste limitée à 127.0.0.1.
+
+- Seules les adresses privées (réseau local) sont acceptées ; jamais d'ouverture sur Internet.
+- Chaque requête porte l'en-tête `X-Subtrad-Code` : le code à 6 chiffres affiché dans les
+  réglages (bouton « Changer le code »). 10 codes faux d'affilée bloquent l'appareil 5 minutes.
+- La télé ne lance aucun lecteur sur le Mac : elle demande une **préparation** (récupération et
+  traduction complètes, gardées dans la mémoire par vidéo), puis lit le flux avec le .srt.
+
+| Requête | Rôle |
+|---|---|
+| `GET /tele/api/info` | nombre d'entrées, langue et nom de la piste traduite |
+| `GET /tele/api/search?q=&kind=&group=&offset=&limit=` | recherche (avec `ready` par vidéo) |
+| `GET /tele/api/groups?kind=` | catégories |
+| `GET /tele/api/ready` | vidéos déjà traduites |
+| `GET /tele/api/video?id=` | détails d'une vidéo, **adresse du flux comprise** |
+| `POST /tele/api/check` `{"id"}` | sous-titres disponibles ? (sans frais) |
+| `POST /tele/api/prepare` `{"id"}` | préparer (réutilise une préparation en cours) |
+| `GET /tele/api/job?id=` | avancement d'une préparation |
+| `POST /tele/api/cancel` `{"id"}` | annuler une préparation |
+| `GET /tele/api/subtitles?id=` | le .srt traduit (404 tant qu'il n'est pas prêt) |
+
+Les directs ne sont pas encore proposés à la télé.
+
 ## Cache
 
 Chaque traduction affiche à la fin son coût estimé (tokens et dollars). Les prix sont dans
@@ -141,6 +168,7 @@ répliques ID ──► replay : fichier .srt ──► player.py (mpv ou VLC, -
 | `mkv.py` | lecture rapide des sous-titres d'un MKV via son index et des requêtes « Range » |
 | `transcribe.py` | transcription Whisper : découpage du son, moteurs whisper.cpp / faster-whisper |
 | `gui.py`, `gui.html` | interface graphique : serveur local (127.0.0.1, jeton de session) et page web |
+| `tele.py` | accès télé : serveur sur le Wi-Fi de la maison, protégé par un code |
 
 ## Limites actuelles et prochaines étapes
 

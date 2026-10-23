@@ -67,6 +67,14 @@ class VideoStore:
         except Exception:
             return None
 
+    def translated_names(self) -> set[str]:
+        """Noms des fichiers traduits présents : une seule lecture du dossier, même pour une
+        playlist de plusieurs centaines de milliers d'entrées."""
+        try:
+            return {entry.name for entry in os.scandir(self.directory / "traductions")}
+        except OSError:
+            return set()
+
     def save_translation(self, url: str, depuis: str, vers: str, model: str,
                          cues: list[Cue]) -> Path:
         path = self.translation_path(url, depuis, vers, model)
