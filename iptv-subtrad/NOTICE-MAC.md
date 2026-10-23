@@ -263,6 +263,17 @@ Exemple : `subtrad regarder "adresse" --decalage -1 --marge 8`
 
 Pour VLC, installe-le d'abord avec `brew install --cask vlc`.
 
+## Si c'est long : lire la ligne orange
+
+Quand un fichier ne peut pas être lu rapidement, la carte de progression affiche en **orange** la
+raison (par exemple « Lecture rapide impossible (le serveur ne permet pas la lecture par
+morceaux) » ou « ce fichier n'est pas un MKV »). Dans ce cas, il faut lire tout le fichier :
+compte plusieurs minutes. Astuce : choisis **mpv** dans les réglages, la vidéo démarre alors au
+bout de quelques secondes pendant que la suite se prépare.
+
+Le programme évite aussi tout seul les sous-titres « **forcés** » (quelques répliques seulement) ;
+s'il n'y en a pas d'autres, il le dit.
+
 ## En cas de problème
 
 | Ce que tu vois | Cause probable | Solution |

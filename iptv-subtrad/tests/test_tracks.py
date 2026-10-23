@@ -11,7 +11,6 @@ import pytest
 
 from subtrad import extract
 from subtrad.extract import EmbeddedTrack, choose_embedded_track
-from subtrad.hls import HlsClient
 from subtrad.mkv import read_mkv_subtitles
 from subtrad.pipeline import check_subtitles, open_cue_source
 
@@ -125,7 +124,7 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
 
 @needs_ffmpeg
 def test_server_refusing_parallel_requests_falls_back_to_one_connection(tmp_path, monkeypatch):
-    film = make_film(tmp_path, forced_first=False)
+    make_film(tmp_path, forced_first=False)
     handler = type("H", (_Handler,), {"busy": 0, "lock": threading.Lock()})
     server = http.server.ThreadingHTTPServer(
         ("127.0.0.1", 0), lambda *a, **k: handler(*a, directory=str(tmp_path), **k))
