@@ -292,6 +292,7 @@ fun HomeScreen(
                     trailingContent = {
                         val job = state.preparing[item.id]
                         when {
+                            item.watched -> Text(stringResource(R.string.badge_watched), color = Color(0xFF9CA3AF))
                             item.ready -> Text(stringResource(R.string.badge_ready), color = MaterialTheme.colorScheme.primary)
                             job != null -> PreparingBadge(job)
                         }

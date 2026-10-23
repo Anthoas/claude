@@ -49,4 +49,9 @@
     <string name="season_specials">Épisodes spéciaux</string>
     <string name="episode_label">Épisode %1$d</string>
     <string name="episode_unavailable">Indisponible</string>
+    <string name="badge_watched">✓ Vu</string>
+    <string name="badge_progress">Vu à %1$d %%</string>
+    <string name="resume">▶ Reprendre à %1$s</string>
+    <string name="from_start">Depuis le début</string>
+    <string name="status_watched">Déjà vu. Les sous-titres indonésiens sont toujours là.</string>
 </resources>

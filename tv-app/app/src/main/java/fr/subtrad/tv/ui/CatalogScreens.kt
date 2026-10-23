@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -196,9 +197,14 @@ private fun PosterCard(poster: Poster, job: Job?, onClick: () -> Unit, modifier:
                     Text(poster.name, modifier = Modifier.padding(8.dp), maxLines = 5)
                 }
                 val badge = when {
+                    poster.watched -> stringResource(R.string.badge_watched)
                     poster.ready -> stringResource(R.string.badge_ready)
                     job != null -> stringResource(R.string.badge_preparing, job.percent)
                     else -> null
+                }
+                if (poster.progress > 0 && !poster.watched) {
+                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(poster.progress.toFloat())
+                        .height(4.dp).background(MaterialTheme.colorScheme.primary))
                 }
                 badge?.let {
                     Text(it, color = Color.White, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
@@ -262,7 +268,9 @@ fun SeriesScreen(
             sheet = client.seriesSheet(seriesId)
             val seasons = sheet!!.seasons
             if (memory.season !in seasons.indices) {
-                memory.season = seasons.indexOfFirst { it.number > 0 }.coerceAtLeast(0)
+                // Première ouverture : saison et épisode à regarder ensuite.
+                memory.season = sheet!!.nextSeason.coerceIn(0, maxOf(0, seasons.lastIndex))
+                memory.episode = sheet!!.nextEpisode
             }
         } catch (e: Exception) {
             error = e
@@ -292,10 +300,15 @@ fun SeriesScreen(
                 if (season == null || season.episodes.isEmpty()) {
                     Text(stringResource(R.string.no_results), color = Color(0xFF9CA3AF))
                 } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Ouvre la liste sur l'épisode à regarder (sinon il serait hors de l'écran).
+                    val listState = remember(memory.season) {
+                        LazyListState(firstVisibleItemIndex = maxOf(memory.episode, 0))
+                    }
+                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         itemsIndexed(season.episodes) { index, episode ->
                             val label = listOf(seasonLabel(season.number, season.name),
-                                               stringResource(R.string.episode_label, episode.number), episode.duration)
+                                               stringResource(R.string.episode_label, episode.number), episode.title,
+                                               episode.duration)
                                 .filter { it.isNotBlank() }.joinToString(" · ")
                             val focus = if (index == maxOf(memory.episode, 0)) Modifier.focusRequester(firstFocus) else Modifier
                             ListItem(
@@ -305,8 +318,25 @@ fun SeriesScreen(
                                     memory.episode = index
                                     onEpisode(episode, s, label)
                                 },
+                                leadingContent = {
+                                    Box(Modifier.width(128.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0xFF1F2937))) {
+                                        if (episode.image.isNotBlank()) {
+                                            AsyncImage(model = episode.image, contentDescription = null,
+                                                       contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                        }
+                                        // Avancement de la lecture, en bas de l'image.
+                                        val seen = if (episode.watched) 1.0 else episode.progress
+                                        if (seen > 0) {
+                                            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(seen.toFloat())
+                                                .height(4.dp).background(MaterialTheme.colorScheme.primary))
+                                        }
+                                    }
+                                },
                                 headlineContent = {
-                                    Text(stringResource(R.string.episode_label, episode.number))
+                                    val title = listOf(stringResource(R.string.episode_label, episode.number), episode.title)
+                                        .filter { it.isNotBlank() }.joinToString(" · ")
+                                    Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 },
                                 supportingContent = {
                                     val meta = listOf(episode.duration, episode.airDate)
@@ -315,9 +345,16 @@ fun SeriesScreen(
                                 },
                                 trailingContent = {
                                     val job = preparing[episode.id]
-                                    when {
-                                        episode.ready -> Text(stringResource(R.string.badge_ready), color = MaterialTheme.colorScheme.primary)
-                                        job != null -> Text(stringResource(R.string.badge_preparing, job.percent), color = Color(0xFFFCD34D))
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        when {
+                                            episode.ready -> Text(stringResource(R.string.badge_ready), color = MaterialTheme.colorScheme.primary)
+                                            job != null -> Text(stringResource(R.string.badge_preparing, job.percent), color = Color(0xFFFCD34D))
+                                        }
+                                        when {
+                                            episode.watched -> Text(stringResource(R.string.badge_watched), color = Color(0xFF9CA3AF))
+                                            episode.progress > 0 -> Text(stringResource(R.string.badge_progress, (episode.progress * 100).toInt()),
+                                                                         color = Color(0xFF9CA3AF))
+                                        }
                                     }
                                 },
                                 modifier = focus,

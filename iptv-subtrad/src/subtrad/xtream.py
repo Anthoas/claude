@@ -84,6 +84,47 @@ def rating_text(value) -> str:
     return f"{number:.1f}".rstrip("0").rstrip(".") if number > 0 else ""
 
 
+_EPISODE_TITLE_RE = re.compile(r"S\d+\s*E\d+\s*-\s*(.+?)\s*$", re.IGNORECASE)
+
+
+def episode_title(full_title: str, info: dict) -> str:
+    """Vrai titre de l'épisode s'il existe : « … - S01 E01 - Il fabrique des réfrigérateurs »
+    ou champ « name » ; « » sinon (le plus souvent : « Série - S01E01 »)."""
+    m = _EPISODE_TITLE_RE.search(full_title or "")
+    if m:
+        return m.group(1)
+    name = info.get("name") if isinstance(info.get("name"), str) else ""
+    return "" if not name or re.search(r"S\d+\s*E\d+", name) else name.strip()
+
+
+Status = Callable[[int], dict]
+
+
+def video_status(status: "Status | None", vid: int) -> dict:
+    """Prête, vue, avancement (0 à 1) d'une vidéo de la playlist."""
+    s = status(vid) if status and vid >= 0 else {}
+    return {"ready": bool(s.get("ready")), "watched": bool(s.get("watched")),
+            "progress": float(s.get("progress") or 0.0)}
+
+
+def next_episode(seasons: list[dict]) -> dict:
+    """Saison et épisode (indices) à proposer : celui en cours, sinon le suivant du dernier vu."""
+    order = [(si, ei, e) for si, s in enumerate(seasons) if s["season"] > 0 for ei, e in enumerate(s["episodes"])]
+    last = None
+    for position, (si, ei, e) in enumerate(order):
+        if e["progress"] > 0 and not e["watched"]:
+            last = (position, False)
+        elif e["watched"]:
+            last = (position, True)
+    if not order:
+        return {"season": 0, "episode": 0}
+    if last is None:
+        index = 0
+    else:
+        index = min(last[0] + 1, len(order) - 1) if last[1] else last[0]
+    return {"season": order[index][0], "episode": order[index][1]}
+
+
 def _first(value) -> str:
     """Une adresse, ou la première d'une liste (backdrop_path est parfois une liste)."""
     if isinstance(value, list):
@@ -292,7 +333,7 @@ class Catalog:
         } for s in page]}
 
     def movies(self, category: str = "", query: str = "", lang: str = "FR",
-               offset: int = 0, limit: int = 60, is_ready: Callable[[int], bool] | None = None) -> dict:
+               offset: int = 0, limit: int = 60, status: Status | None = None) -> dict:
         found = self._matching(self._ensure()["vod"], category, query, lang)
         page = found[offset: offset + limit]
         items = []
@@ -301,8 +342,7 @@ class Catalog:
             items.append({
                 "vod_id": v.get("stream_id"), "id": vid, "name": clean_name(v.get("name", "")),
                 "cover": self._image(v.get("stream_icon")), "year": year_of(v.get("name", "")),
-                "rating": rating_text(v.get("rating")),
-                "ready": bool(is_ready and vid >= 0 and is_ready(vid)),
+                "rating": rating_text(v.get("rating")), **video_status(status, vid),
             })
         return {"total": len(found), "items": items}
 
@@ -316,7 +356,7 @@ class Catalog:
         self._info[series_id] = (self._clock(), info)
         return info
 
-    def series_detail(self, series_id: int, is_ready: Callable[[int], bool] | None = None) -> dict:
+    def series_detail(self, series_id: int, status: Status | None = None) -> dict:
         data = self._ensure()
         summary = next((s for s in data["series"] if str(s.get("series_id")) == str(series_id)), None)
         if summary is None:
@@ -335,11 +375,10 @@ class Catalog:
                 vid = self.video_id("series", e.get("id"))
                 items.append({
                     "id": vid, "episode": int(e.get("episode_num") or 0),
-                    "title": clean_name(e.get("title") or ""),
+                    "title": episode_title(e.get("title") or "", einfo),
                     "duration": duration_text(einfo), "air_date": einfo.get("air_date") or "",
                     "rating": rating_text(einfo.get("rating")), "image": self._image(einfo.get("movie_image")),
-                    "plot": einfo.get("plot") or "",
-                    "ready": bool(is_ready and vid >= 0 and is_ready(vid)),
+                    "plot": einfo.get("plot") or "", **video_status(status, vid),
                 })
             seasons.append({"season": int(number) if str(number).isdigit() else 0,
                             "name": names.get(str(number)) or f"Saison {number}", "episodes": items})
@@ -353,10 +392,10 @@ class Catalog:
             "director": about.get("director") or summary.get("director") or "",
             "year": (about.get("releaseDate") or summary.get("releaseDate") or "")[:4],
             "rating": rating_text(about.get("rating") or summary.get("rating")),
-            "seasons": seasons,
+            "seasons": seasons, "next": next_episode(seasons),
         }
 
-    def movie_detail(self, vod_id: int, is_ready: Callable[[int], bool] | None = None) -> dict:
+    def movie_detail(self, vod_id: int, status: Status | None = None) -> dict:
         data = self._ensure()
         summary = next((v for v in data["vod"] if str(v.get("stream_id")) == str(vod_id)), None)
         if summary is None:
@@ -372,6 +411,5 @@ class Catalog:
             "genre": info.get("genre") or "", "cast": info.get("cast") or info.get("actors") or "",
             "director": info.get("director") or "", "duration": duration_text(info, movie=True),
             "year": (info.get("releasedate") or "")[:4] or year_of(summary.get("name", "")),
-            "rating": rating_text(summary.get("rating") or info.get("rating")),
-            "ready": bool(is_ready and vid >= 0 and is_ready(vid)),
+            "rating": rating_text(summary.get("rating") or info.get("rating")), **video_status(status, vid),
         }

@@ -178,3 +178,18 @@ def test_stream_url_is_never_sent_to_the_page(tmp_path):
     public = job_public(app.jobs[job.id])
     assert "channel_url" not in public and "iptv" not in str(public) and "master.m3u8" not in str(public)
     assert pipeline_module  # le module est bien celui utilisé
+
+
+def test_progress_is_remembered_and_watched_stays(tmp_path):
+    store = VideoStore(tmp_path)
+    url = "http://iptv.example/series/MONUSER/MONMDP/1.mkv"
+    assert store.progress(url) == {"position": 0, "duration": 0, "watched": False, "progress": 0.0}
+    store.save_progress(url, 1_200_000, 3_000_000)
+    assert VideoStore(tmp_path).progress(url)["progress"] == 0.4  # relu depuis le disque
+    store.save_progress(url, 2_800_000, 3_000_000)  # plus de 90 % : vu
+    assert store.progress(url)["watched"] is True
+    store.save_progress(url, 60_000, 3_000_000)  # revue depuis le début : reste « vue »
+    assert store.progress(url)["watched"] is True and store.progress(url)["position"] == 60_000
+    store.save_progress(url, 0, 0, ended=True)
+    assert store.progress(url)["position"] == 0  # fin atteinte : rien à reprendre
+    assert "MONMDP" not in (tmp_path / "progress.json").read_text()

@@ -16,6 +16,7 @@ data class VideoItem(
     val group: String,
     val kind: String,
     val ready: Boolean,
+    val watched: Boolean = false,
 )
 
 data class Page(val total: Int, val items: List<VideoItem>)
@@ -29,6 +30,8 @@ data class VideoDetails(
     val url: String,
     val subtitleLabel: String,
     val language: String,
+    val positionMs: Long = 0, // où la lecture s'était arrêtée
+    val watched: Boolean = false,
 )
 
 data class CheckResult(val ok: Boolean, val message: String)
@@ -47,6 +50,8 @@ data class Poster(
     val year: String,
     val rating: String,
     val ready: Boolean,
+    val watched: Boolean = false,
+    val progress: Double = 0.0,
 )
 
 data class PosterPage(val total: Int, val items: List<Poster>)
@@ -59,6 +64,9 @@ data class Episode(
     val airDate: String,
     val image: String,
     val ready: Boolean,
+    val plot: String = "",
+    val watched: Boolean = false,
+    val progress: Double = 0.0,
 )
 
 data class Season(val number: Int, val name: String, val episodes: List<Episode>)
@@ -75,6 +83,8 @@ data class Sheet(
     val duration: String,
     val id: Int, // film : vidéo de la playlist
     val seasons: List<Season>,
+    val nextSeason: Int = 0, // saison et épisode (indices) à proposer
+    val nextEpisode: Int = 0,
 )
 
 /** Une préparation (récupération et traduction) qui tourne sur le Mac. */
@@ -129,6 +139,7 @@ class SubtradClient(address: String, private val code: String) {
             ready = o.getBoolean("ready"), url = o.getString("url"),
             subtitleLabel = o.optString("subtitle_label", "Indonesia"),
             language = o.optString("language", "id"),
+            positionMs = o.optLong("position"), watched = o.optBoolean("watched"),
         )
     }
 
@@ -177,6 +188,7 @@ class SubtradClient(address: String, private val code: String) {
                 vodId = if (p.has("vod_id")) p.optInt("vod_id") else null,
                 id = p.optInt("id", -1), name = p.optString("name"), cover = p.optString("cover"),
                 year = p.optString("year"), rating = p.optString("rating"), ready = p.optBoolean("ready"),
+                watched = p.optBoolean("watched"), progress = p.optDouble("progress", 0.0),
             )
         })
     }
@@ -190,18 +202,27 @@ class SubtradClient(address: String, private val code: String) {
             Season(s.optInt("season"), s.optString("name"), (0 until eps.length()).map { j ->
                 val e = eps.getJSONObject(j)
                 Episode(e.optInt("id", -1), e.optInt("episode"), e.optString("title"), e.optString("duration"),
-                    e.optString("air_date"), e.optString("image"), e.optBoolean("ready"))
+                    e.optString("air_date"), e.optString("image"), e.optBoolean("ready"), e.optString("plot"),
+                    e.optBoolean("watched"), e.optDouble("progress", 0.0))
             })
         })
     }
 
     suspend fun movieSheet(vodId: Int): Sheet = sheet(getJson("/tele/api/catalog/movie?id=$vodId"), emptyList())
 
+    /** Où en est la lecture (le Mac s'en souvient : « Vu », reprise). */
+    suspend fun saveProgress(id: Int, positionMs: Long, durationMs: Long, ended: Boolean) {
+        postJson("/tele/api/progress", JSONObject().put("id", id).put("position", positionMs)
+            .put("duration", durationMs).put("ended", ended))
+    }
+
     private fun sheet(o: JSONObject, seasons: List<Season>) = Sheet(
         name = o.optString("name"), cover = o.optString("cover"), backdrop = o.optString("backdrop"),
         plot = o.optString("plot"), genre = o.optString("genre"), year = o.optString("year"),
         rating = o.optString("rating"), duration = o.optString("duration"), id = o.optInt("id", -1),
         seasons = seasons,
+        nextSeason = o.optJSONObject("next")?.optInt("season") ?: 0,
+        nextEpisode = o.optJSONObject("next")?.optInt("episode") ?: 0,
     )
 
     /** Télécharge le .srt traduit dans `target` (le lecteur le lit ensuite depuis la télé). */
@@ -228,7 +249,7 @@ class SubtradClient(address: String, private val code: String) {
         return Page(o.getInt("total"), (0 until items.length()).map { i ->
             val it = items.getJSONObject(i)
             VideoItem(it.getInt("id"), it.getString("name"), it.optString("group"),
-                it.optString("kind"), it.optBoolean("ready"))
+                it.optString("kind"), it.optBoolean("ready"), it.optBoolean("watched"))
         })
     }
 

@@ -50,4 +50,9 @@
     <string name="season_specials">Spesial</string>
     <string name="episode_label">Episode %1$d</string>
     <string name="episode_unavailable">Tidak tersedia</string>
+    <string name="badge_watched">✓ Sudah ditonton</string>
+    <string name="badge_progress">Ditonton %1$d %%</string>
+    <string name="resume">▶ Lanjutkan (%1$s)</string>
+    <string name="from_start">Dari awal</string>
+    <string name="status_watched">Sudah ditonton. Subtitle bahasa Indonesia masih tersedia.</string>
 </resources>

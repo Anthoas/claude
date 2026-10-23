@@ -20,13 +20,14 @@ import fr.subtrad.tv.Prefs
 import fr.subtrad.tv.SubtradClient
 import fr.subtrad.tv.VideoDetails
 import java.io.File
+import kotlinx.coroutines.launch
 
 sealed interface Screen {
     data object Setup : Screen
     data object Home : Screen
     data class Detail(val id: Int, val name: String, val info: DetailInfo? = null) : Screen
     data class Series(val seriesId: Int, val name: String) : Screen
-    data class Player(val video: VideoDetails, val subtitles: File) : Screen
+    data class Player(val video: VideoDetails, val subtitles: File, val startMs: Long) : Screen
 }
 
 @Composable
@@ -73,7 +74,7 @@ fun SubtradApp(prefs: Prefs) {
                         client = c, id = screen.id, name = screen.name, info = screen.info,
                         onReady = home::markReady,
                         onDeleted = { id -> home.markDeleted(id); pop() },
-                        onWatch = { video, file -> push(Screen.Player(video, file)) },
+                        onWatch = { video, file, startMs -> push(Screen.Player(video, file, startMs)) },
                         onBack = { pop() },
                     )
                 }
@@ -87,7 +88,14 @@ fun SubtradApp(prefs: Prefs) {
                         },
                     )
                 }
-                is Screen.Player -> PlayerScreen(screen.video, screen.subtitles, onExit = { pop() })
+                is Screen.Player -> PlayerScreen(
+                    screen.video, screen.subtitles, screen.startMs,
+                    onProgress = { position, duration, ended ->
+                        val c = client
+                        scope.launch { runCatching { c?.saveProgress(screen.video.id, position, duration, ended) } }
+                    },
+                    onExit = { pop() },
+                )
             }
         }
     }

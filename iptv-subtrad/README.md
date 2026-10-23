@@ -98,7 +98,7 @@ en avance (S < 0) ou en retard (S > 0) sur la parole, `--taille` pour la taille 
 ## Mémoire par vidéo
 
 `store.py` garde dans `~/.cache/subtrad/videos/` les sous-titres d'origine (JSON) et la traduction
-terminée (.srt) de chaque vidéo, sous des noms dérivés d'une empreinte de l'adresse (jamais l'adresse
+terminée (.srt) de chaque vidéo, et où en est sa lecture (`progress.json`), sous des noms dérivés d'une empreinte de l'adresse (jamais l'adresse
 elle-même, qui contient souvent identifiant et mot de passe). Une vidéo déjà traduite s'ouvre
 aussitôt, sans clé ni coût ; seul un travail complet est gardé (ni annulation, ni lot en échec).
 Le badge « déjà traduit » et le bouton « Refaire » de la page s'appuient dessus.
@@ -128,6 +128,7 @@ l'application Android TV. La page du Mac reste limitée à 127.0.0.1.
 | `GET /tele/api/job?id=` | avancement d'une préparation |
 | `POST /tele/api/cancel` `{"id"}` | annuler une préparation |
 | `POST /tele/api/forget` `{"id"}` | supprimer une vidéo prête (traduction et sous-titres d'origine) |
+| `POST /tele/api/progress` `{"id","position","duration","ended"}` | où en est la lecture (ms) ; « vu » au-delà de 90 % ou à la fin |
 | `GET /tele/api/subtitles?id=` | le .srt traduit (404 tant qu'il n'est pas prêt) |
 
 Les directs ne sont pas encore proposés à la télé.
@@ -149,7 +150,7 @@ serveur du fournisseur ne sont jamais transmises. Langue : `lang=FR` par défaut
 | `GET /tele/api/catalog` | `{"available": true}` si le lien est Xtream Codes |
 | `GET /tele/api/catalog/categories?type=series\|movie&lang=FR` | catégories non vides, avec leur nombre |
 | `GET /tele/api/catalog/series?category=&q=&offset=&limit=` | séries (nom, affiche, année, note, genre) |
-| `GET /tele/api/catalog/series/info?id=SERIES_ID` | fiche : résumé, genre, acteurs, saisons et épisodes (`id`, durée, `ready`) |
+| `GET /tele/api/catalog/series/info?id=SERIES_ID` | fiche : résumé, genre, saisons, épisodes (`id`, titre, image, durée, `ready`, `watched`, `progress`) et `next` (épisode à regarder) |
 | `GET /tele/api/catalog/movies?category=&q=&offset=&limit=` | films (`vod_id`, `id`, affiche, `ready`) |
 | `GET /tele/api/catalog/movie?id=VOD_ID` | fiche d'un film : résumé, durée, genre, `id`, `ready` |
 

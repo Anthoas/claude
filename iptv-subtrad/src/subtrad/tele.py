@@ -150,6 +150,9 @@ class _TvHandler(BaseHTTPRequestHandler):
                 return self._json(app.check(int(params["id"])))
             if (method, path) == ("POST", "/tele/api/prepare"):
                 return self._json(app.prepare(int(params["id"])))
+            if (method, path) == ("POST", "/tele/api/progress"):
+                return self._json(app.save_progress(int(params["id"]), int(params.get("position", 0)),
+                                                    int(params.get("duration", 0)), bool(params.get("ended"))))
             if (method, path) == ("POST", "/tele/api/forget"):
                 return self._json(app.forget(int(params["id"])))
             if (method, path) == ("POST", "/tele/api/cancel"):
@@ -174,11 +177,11 @@ class _TvHandler(BaseHTTPRequestHandler):
         if (method, path) == ("GET", "/tele/api/catalog/series"):
             return self._json(catalog.series(**page))
         if (method, path) == ("GET", "/tele/api/catalog/series/info"):
-            return self._json(catalog.series_detail(int(params["id"]), app.video_ready))
+            return self._json(catalog.series_detail(int(params["id"]), app.video_status))
         if (method, path) == ("GET", "/tele/api/catalog/movies"):
-            return self._json(catalog.movies(**page, is_ready=app.video_ready))
+            return self._json(catalog.movies(**page, status=app.video_status))
         if (method, path) == ("GET", "/tele/api/catalog/movie"):
-            return self._json(catalog.movie_detail(int(params["id"]), app.video_ready))
+            return self._json(catalog.movie_detail(int(params["id"]), app.video_status))
         return self._json({"error": "Introuvable."}, 404)
 
 

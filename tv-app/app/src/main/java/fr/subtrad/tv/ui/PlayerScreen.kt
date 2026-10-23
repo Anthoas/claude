@@ -54,7 +54,13 @@ import java.io.File
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(video: VideoDetails, subtitles: File, onExit: () -> Unit) {
+fun PlayerScreen(
+    video: VideoDetails,
+    subtitles: File,
+    startMs: Long,
+    onProgress: (positionMs: Long, durationMs: Long, ended: Boolean) -> Unit,
+    onExit: () -> Unit,
+) {
     val context = LocalContext.current
     var error by remember { mutableStateOf<String?>(null) }
     val exitButton = remember { FocusRequester() }
@@ -62,7 +68,7 @@ fun PlayerScreen(video: VideoDetails, subtitles: File, onExit: () -> Unit) {
     // Dolby Vision : d'abord la couche HDR10 avec le décodeur HEVC (voir hevcForDolbyVision) ;
     // le décodeur Dolby Vision ne sert que si la vidéo n'a pas de couche compatible.
     var dolbyVision by remember { mutableStateOf(false) }
-    var resumeAt by remember { mutableLongStateOf(0L) }
+    var resumeAt by remember { mutableLongStateOf(startMs) }
 
     val player = remember(dolbyVision) {
         val http = DefaultHttpDataSource.Factory()
@@ -105,11 +111,27 @@ fun PlayerScreen(video: VideoDetails, subtitles: File, onExit: () -> Unit) {
                 }
                 error = "${e.errorCodeName} (${e.cause?.javaClass?.simpleName ?: e.message})"
             }
+
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED && player.duration > 0) onProgress(player.duration, player.duration, true)
+            }
         }
         player.addListener(listener)
         onDispose {
+            // Vidéo quittée : on retient où on en était (reprise, « Vu »).
+            if (player.duration > 0 && player.playbackState != Player.STATE_ENDED) {
+                onProgress(player.currentPosition, player.duration, false)
+            }
             player.removeListener(listener)
             player.release()
+        }
+    }
+
+    // Toutes les 15 s pendant la lecture : si la télé s'éteint, on ne perd presque rien.
+    LaunchedEffect(player) {
+        while (true) {
+            kotlinx.coroutines.delay(15_000)
+            if (player.isPlaying && player.duration > 0) onProgress(player.currentPosition, player.duration, false)
         }
     }
 

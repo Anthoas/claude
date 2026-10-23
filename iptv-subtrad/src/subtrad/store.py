@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -26,9 +27,14 @@ def default_store_dir() -> Path:
     return default_cache_path().parent / "videos"
 
 
+WATCHED_FRACTION = 0.9  # au-delà, la vidéo est « vue »
+
+
 class VideoStore:
     def __init__(self, directory: Path | None = None):
         self.directory = Path(directory) if directory else default_store_dir()
+        self._progress_lock = threading.Lock()
+        self._progress: dict | None = None
 
     @staticmethod
     def _key(*parts: str) -> str:
@@ -89,6 +95,38 @@ class VideoStore:
         for path in (self._source_path(url, depuis),
                      self.translation_path(url, depuis, vers, model)):
             path.unlink(missing_ok=True)
+
+    # --- avancement de la lecture (ce qui a été regardé) ---
+
+    def _progress_data(self) -> dict:
+        if self._progress is None:
+            try:
+                self._progress = json.loads((self.directory / "progress.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                self._progress = {}
+        return self._progress
+
+    def save_progress(self, url: str, position_ms: int, duration_ms: int, ended: bool = False) -> dict:
+        """Retient où la lecture s'est arrêtée. « Vu » reste acquis même si on la revoit."""
+        key = self._key(url)
+        with self._progress_lock:
+            data = self._progress_data()
+            old = data.get(key, {})
+            position, duration = max(0, int(position_ms)), max(0, int(duration_ms))
+            watched = bool(old.get("watched")) or ended or (
+                duration > 0 and position >= duration * WATCHED_FRACTION)
+            data[key] = {"position": 0 if ended else position, "duration": duration or old.get("duration", 0),
+                         "watched": watched, "updated": int(time.time())}
+            self._write(self.directory / "progress.json", json.dumps(data))
+            return dict(data[key])
+
+    def progress(self, url: str) -> dict:
+        """{"position": ms, "duration": ms, "watched": bool, "progress": 0 à 1}."""
+        with self._progress_lock:
+            entry = dict(self._progress_data().get(self._key(url), {}))
+        position, duration = entry.get("position", 0), entry.get("duration", 0)
+        return {"position": position, "duration": duration, "watched": bool(entry.get("watched")),
+                "progress": round(min(1.0, position / duration), 3) if duration else 0.0}
 
     # --- outils ---
 

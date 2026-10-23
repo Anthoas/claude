@@ -12,8 +12,8 @@ from subtrad.playlist import parse_m3u
 from subtrad.store import VideoStore
 from subtrad.subtitles import Cue
 from subtrad.tele import TvAccess
-from subtrad.xtream import (Catalog, XtreamAccount, clean_name, duration_text, language_of, rating_text,
-                            year_of)
+from subtrad.xtream import (Catalog, XtreamAccount, clean_name, duration_text, episode_title, language_of,
+                            next_episode, rating_text, year_of)
 
 SOURCE = "http://portal.example:8080/get.php?username=MONUSER&password=MONMDP&type=m3u_plus"
 STREAM = "http://stream.example:80"
@@ -104,6 +104,26 @@ def test_name_helpers():
     assert year_of("Le Dîner de cons (1998)") == "1998" and year_of("Sans année") == ""
 
 
+def test_episode_titles_and_next_episode():
+    assert episode_title("|FR| Sunny (2024) - S01 E01 - Il fabrique des réfrigérateurs", {}) == \
+        "Il fabrique des réfrigérateurs"
+    assert episode_title("|FR| Game of Thrones 2011 4K MULTI - S06E05", {}) == ""
+    assert episode_title("|FR| X - S01E02", {"name": "La Porte"}) == "La Porte"
+    assert episode_title("|FR| X - S01E02", {"name": "X S01E02"}) == ""
+
+    def ep(watched=False, progress=0.0):
+        return {"watched": watched, "progress": progress}
+
+    seasons = [{"season": 0, "episodes": [ep()]},  # épisodes spéciaux : ignorés
+               {"season": 1, "episodes": [ep(True), ep(True)]},
+               {"season": 2, "episodes": [ep(), ep()]}]
+    assert next_episode(seasons) == {"season": 2, "episode": 0}  # suite logique : S02E01
+    seasons[2]["episodes"][0] = ep(progress=0.4)
+    assert next_episode(seasons) == {"season": 2, "episode": 0}  # commencé : on y revient
+    assert next_episode([{"season": 1, "episodes": [ep(), ep()]}]) == {"season": 0, "episode": 0}
+    assert next_episode([{"season": 1, "episodes": [ep(True)]}]) == {"season": 0, "episode": 0}  # dernier vu
+
+
 def test_account_comes_from_the_playlist_link():
     account = XtreamAccount.from_playlist_source(SOURCE)
     assert (account.base, account.username, account.password) == ("http://portal.example:8080", "MONUSER", "MONMDP")
@@ -126,12 +146,14 @@ def test_categories_and_series_are_french_by_default_and_searchable(tmp_path):
 def test_series_detail_groups_seasons_and_links_episodes_to_the_playlist(tmp_path):
     catalog, _ = make_catalog(tmp_path)
     ready = {0}  # S01E01 = entrée 0 de la playlist, déjà traduite
-    detail = catalog.series_detail(77, is_ready=lambda vid: vid in ready)
+    detail = catalog.series_detail(77, status=lambda vid: {"ready": vid in ready, "watched": vid == 0})
     assert detail["plot"].startswith("Des familles") and detail["backdrop"].endswith("back.jpg")
     assert [s["season"] for s in detail["seasons"]] == [1, 2]
     s1 = detail["seasons"][0]["episodes"]
     assert [(e["episode"], e["id"], e["ready"]) for e in s1] == [(1, 0, True), (2, 1, False), (3, -1, False)]
-    assert s1[0]["title"] == "Game of Thrones 2011 4K MULTI - S01E01" and s1[0]["duration"] == "01:02:00"
+    assert s1[0]["title"] == "" and s1[0]["duration"] == "01:02:00"  # pas de vrai titre fourni
+    assert s1[0]["watched"] is True and s1[1]["watched"] is False
+    assert detail["next"] == {"season": 0, "episode": 1}  # S01E01 vu : on propose S01E02
     assert detail["seasons"][1]["episodes"][0]["id"] == 2
     with pytest.raises(KeyError):
         catalog.series_detail(12345)
@@ -139,10 +161,11 @@ def test_series_detail_groups_seasons_and_links_episodes_to_the_playlist(tmp_pat
 
 def test_movies_are_linked_to_the_playlist(tmp_path):
     catalog, _ = make_catalog(tmp_path)
-    page = catalog.movies(is_ready=lambda vid: vid == 3)
+    page = catalog.movies(status=lambda vid: {"ready": vid == 3, "progress": 0.25})
     assert [(m["name"], m["id"], m["ready"], m["year"]) for m in page["items"]] == [
         ("Le Dîner de cons (1998)", 3, True, "1998"), ("Absent de la playlist - 2022", -1, False, "2022")]
-    assert page["items"][0]["rating"] == "7.4"
+    assert page["items"][0]["rating"] == "7.4" and page["items"][0]["progress"] == 0.25
+    assert page["items"][1]["progress"] == 0.0  # absent de la playlist : aucun état
     detail = catalog.movie_detail(501)
     assert detail["id"] == 3 and detail["duration"] == "1 h 20" and detail["year"] == "1998"
 
@@ -221,7 +244,17 @@ def test_tv_catalog_endpoints(tele):
     store.save_translation(app.library.get(0).url, "fr", "id", app.settings["model"], [Cue(0, 1000, "Halo")])
     detail = session.get(base + "/tele/api/catalog/series/info", params={"id": 77}).json()
     first = detail["seasons"][0]["episodes"][0]
-    assert first["id"] == 0 and first["ready"] is True
+    assert first["id"] == 0 and first["ready"] is True and first["watched"] is False
+
+    # La télé signale où en est la lecture ; « Vu » au-delà de 90 %.
+    saved = session.post(base + "/tele/api/progress", json={"id": 0, "position": 600_000, "duration": 3_600_000}).json()
+    assert saved["watched"] is False and saved["position"] == 600_000
+    video = session.get(base + "/tele/api/video", params={"id": 0}).json()
+    assert video["position"] == 600_000 and video["watched"] is False
+    session.post(base + "/tele/api/progress", json={"id": 0, "position": 3_300_000, "duration": 3_600_000})
+    detail = session.get(base + "/tele/api/catalog/series/info", params={"id": 77}).json()
+    assert detail["seasons"][0]["episodes"][0]["watched"] is True and detail["next"] == {"season": 0, "episode": 1}
+    assert session.get(base + "/tele/api/ready").json()["items"][0]["watched"] is True
     # L'épisode se lit ensuite avec les adresses habituelles (numéro de la playlist).
     assert session.get(base + "/tele/api/subtitles", params={"id": first["id"]}).status_code == 200
     movie = session.get(base + "/tele/api/catalog/movie", params={"id": 501}).json()

@@ -296,7 +296,9 @@ class GuiApp:
     def search(self, query="", kind="", group="", offset=0, limit=100) -> dict:
         result = self.library.search(query, kind, group, offset, limit)
         for item in result["items"]:
-            item["ready"] = self.is_ready(self.library.get(item["id"]))
+            channel = self.library.get(item["id"])
+            item["ready"] = self.is_ready(channel)
+            item["watched"] = self.store.progress(channel.url)["watched"]
         return result
 
     def forget(self, index: int) -> dict:
@@ -310,6 +312,14 @@ class GuiApp:
 
     def video_ready(self, index: int) -> bool:
         return self.is_ready(self.library.get(index))
+
+    def video_status(self, index: int) -> dict:
+        """Prête (traduite) et regardée : badges et reprise de la lecture sur la télé."""
+        channel = self.library.get(index)
+        return {"ready": self.is_ready(channel), **self.store.progress(channel.url)}
+
+    def save_progress(self, index: int, position_ms: int, duration_ms: int, ended: bool = False) -> dict:
+        return self.store.save_progress(self.library.get(index).url, position_ms, duration_ms, ended)
 
     # --- télé ---
 
@@ -328,7 +338,8 @@ class GuiApp:
         candidates = [(i, c) for i, c in channels if c.kind != "direct" and names
                       and self.store.translation_path(*self._store_args(c)).name in names]
         items = [{"id": i, "name": c.name, "group": c.group, "logo": c.logo, "kind": c.kind,
-                  "kind_label": KIND_LABELS[c.kind], "ready": True}
+                  "kind_label": KIND_LABELS[c.kind], "ready": True,
+                  "watched": self.store.progress(c.url)["watched"]}
                  for i, c in candidates if self.is_ready(c)]
         return {"total": len(items), "items": items[:limit]}
 
@@ -338,6 +349,7 @@ class GuiApp:
         channel = self.library.get(index)
         return {"id": index, "name": channel.name, "group": channel.group, "logo": channel.logo,
                 "kind": channel.kind, "ready": self.is_ready(channel), "url": channel.url,
+                **self.store.progress(channel.url),
                 "subtitle_label": self.subtitle_label(), "language": self.settings["vers"]}
 
     def subtitles_for_tv(self, index: int) -> Path | None:

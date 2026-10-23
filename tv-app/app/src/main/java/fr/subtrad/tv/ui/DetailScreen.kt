@@ -44,7 +44,7 @@ fun DetailScreen(
     info: DetailInfo?,
     onReady: (Int) -> Unit,
     onDeleted: (Int) -> Unit,
-    onWatch: (VideoDetails, File) -> Unit,
+    onWatch: (VideoDetails, File, Long) -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -128,17 +128,25 @@ fun DetailScreen(
             video == null && error == null -> Text(stringResource(R.string.loading))
             video == null -> Unit
             video.ready -> {
-                Text(stringResource(R.string.status_ready), color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(if (video.watched) R.string.status_watched else R.string.status_ready),
+                     color = MaterialTheme.colorScheme.primary)
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    fun watch(startMs: Long) = action(R.string.downloading_subs) {
+                        val file = File(context.cacheDir, "subtitles/$id.srt")
+                        onWatch(video, client.downloadSubtitles(id, file), startMs)
+                    }
+                    // Commencée et pas finie : on propose de reprendre là où on s'était arrêté.
+                    val resume = video.positionMs >= 60_000 && !video.watched
                     Button(
-                        onClick = {
-                            action(R.string.downloading_subs) {
-                                val file = File(context.cacheDir, "subtitles/$id.srt")
-                                onWatch(video, client.downloadSubtitles(id, file))
-                            }
-                        },
+                        onClick = { watch(if (resume) video.positionMs else 0L) },
                         modifier = Modifier.focusRequester(mainButton),
-                    ) { Text(stringResource(R.string.watch)) }
+                    ) {
+                        Text(if (resume) stringResource(R.string.resume, minutesText(video.positionMs))
+                             else stringResource(R.string.watch))
+                    }
+                    if (resume) {
+                        OutlinedButton(onClick = { watch(0L) }) { Text(stringResource(R.string.from_start)) }
+                    }
                     OutlinedButton(onClick = onBack) { Text(stringResource(R.string.back)) }
                     OutlinedButton(
                         onClick = {
@@ -215,3 +223,9 @@ fun DetailScreen(
 
 /** En-tête d'une fiche venue du catalogue : fiche de la série (épisode) ou numéro du film. */
 data class DetailInfo(val sheet: Sheet?, val subtitle: String, val vodId: Int?)
+
+/** « 23 min » ou « 1 h 05 ». */
+fun minutesText(ms: Long): String {
+    val minutes = ms / 60_000
+    return if (minutes >= 60) "${minutes / 60} h ${"%02d".format(minutes % 60)}" else "$minutes min"
+}
