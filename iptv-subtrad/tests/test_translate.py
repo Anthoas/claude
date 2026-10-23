@@ -71,7 +71,7 @@ def test_claude_translator_request_and_parsing():
         "Terima kasih.",
     ]
     request = calls[0]
-    assert request["model"] == "claude-opus-5-5"
+    assert request["model"] == "claude-sonnet-5-5"
     assert request["output_config"]["format"]["type"] == "json_schema"
     assert "Indonesian" in request["system"]
     payload = json.loads(request["messages"][0]["content"])
@@ -84,3 +84,27 @@ def test_srt_roundtrip(tmp_path):
     content = path.read_text(encoding="utf-8")
     assert "00:00:01,500 --> 00:00:03,000" in content
     assert parse_subtitles(content) == [Cue(1500, 3000, "Halo,\napa kabar?")]
+
+
+def test_refused_single_cue_is_kept_and_not_cached():
+    calls = []
+
+    def create(**kwargs):
+        texts = [c["text"] for c in json.loads(kwargs["messages"][0]["content"])["cues"]]
+        calls.append(texts)
+        if "Je vais te tuer !" in texts:
+            return SimpleNamespace(stop_reason="refusal", stop_details=None, content=[])
+        reply = {"translations": [{"id": i, "text": t.upper()} for i, t in enumerate(texts)]}
+        return SimpleNamespace(
+            stop_reason="end_turn", stop_details=None,
+            content=[SimpleNamespace(type="text", text=json.dumps(reply))],
+        )
+
+    client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    cache = TranslationCache(":memory:")
+    cues = [Cue(0, 1, "Bonjour."), Cue(1, 2, "Je vais te tuer !"), Cue(2, 3, "Merci.")]
+    result = translate_cues(cues, ClaudeTranslator(client=client), cache)
+    # Le lot refusé est coupé en deux jusqu'à isoler la réplique, gardée en français.
+    assert [c.text for c in result] == ["BONJOUR.", "Je vais te tuer !", "MERCI."]
+    namespace = ClaudeTranslator(client=client).namespace
+    assert set(cache.get_many(namespace, [c.text for c in cues])) == {"Bonjour.", "Merci."}

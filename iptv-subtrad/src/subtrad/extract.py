@@ -60,6 +60,19 @@ def probe_subtitle_tracks(url: str, timeout: float = 60.0) -> list[EmbeddedTrack
     ]
 
 
+def stream_duration(url: str, timeout: float = 60.0) -> float | None:
+    """Durée du flux en secondes, None pour un direct (durée inconnue)."""
+    out = subprocess.run(
+        [_require("ffprobe"), "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", url],
+        capture_output=True, text=True, timeout=timeout, check=True,
+    ).stdout.strip()
+    try:
+        return float(out)
+    except ValueError:
+        return None
+
+
 def extract_text_track(url: str, track: EmbeddedTrack, timeout: float | None = None) -> list[Cue]:
     """Extrait une piste texte en SRT. Sur un flux réseau, ffmpeg lit tout le flux."""
     if not track.is_text:

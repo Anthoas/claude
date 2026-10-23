@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Callable, Protocol
 
 import anthropic
@@ -10,7 +11,9 @@ import anthropic
 from .cache import TranslationCache
 from .subtitles import Cue
 
-DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_MODEL = "claude-sonnet-5-5"
+
+log = logging.getLogger(__name__)
 
 LANGUAGE_NAMES = {
     "fr": "French",
@@ -93,8 +96,8 @@ class ClaudeTranslator:
         response = self.client.beta.messages.create(
             model=self.model,
             max_tokens=16000,
-            # En cas de refus d'un filtre de sécurité (faux positif sur un dialogue
-            # de film violent, par ex.), l'API relance la requête sur un autre modèle.
+            # Si un filtre de sécurité refuse la requête, l'API la relance sur un autre
+            # modèle quand la catégorie du refus le permet (API Claude uniquement).
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
             output_config={
@@ -105,12 +108,16 @@ class ClaudeTranslator:
             messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
         )
 
-        if response.stop_reason == "refusal":
-            raise TranslationError(f"Traduction refusée : {response.stop_details}")
-        if response.stop_reason == "max_tokens":
+        if response.stop_reason in ("refusal", "max_tokens"):
             if len(texts) == 1:
-                raise TranslationError("Réponse tronquée sur une seule réplique.")
-            # Lot trop gros pour une réponse : on le coupe en deux.
+                if response.stop_reason == "max_tokens":
+                    raise TranslationError("Réponse tronquée sur une seule réplique.")
+                # Une réplique isolée refusée (dialogue violent, par ex.) : on garde l'original
+                # plutôt que d'interrompre tout le film.
+                log.warning("Réplique non traduite (refus) : %r", texts[0])
+                return list(texts)
+            # Lot trop long pour une réponse, ou refusé à cause d'une seule réplique :
+            # on le coupe en deux pour isoler le problème.
             half = len(texts) // 2
             first = self.translate_batch(texts[:half], context)
             return first + self.translate_batch(
@@ -132,8 +139,13 @@ def translate_cues(
     batch_size: int = 40,
     context_size: int = 5,
     on_progress: Callable[[int, int], None] | None = None,
+    history: list[tuple[str, str]] | None = None,
 ) -> list[Cue]:
-    """Traduit toutes les répliques, par lots, en réutilisant le cache."""
+    """Traduit toutes les répliques, par lots, en réutilisant le cache.
+
+    `history` : dernières répliques déjà traduites (original, traduction) qui précèdent
+    `cues`, utilisées comme contexte (mode direct, où les répliques arrivent par paquets).
+    """
     texts = [c.text for c in cues]
     done: dict[str, str] = cache.get_many(translator.namespace, texts) if cache else {}
     # Une seule traduction par texte distinct (« Oui. », « Merci. » reviennent souvent).
@@ -147,16 +159,19 @@ def translate_cues(
         indices = todo[start : start + batch_size]
         # Contexte : les répliques qui précèdent le lot dans le film, déjà traduites.
         first = indices[0]
-        context = [
+        context = list(history or []) + [
             (texts[j], done[texts[j]])
             for j in range(max(0, first - context_size), first)
             if texts[j] in done
         ]
+        context = context[-context_size:] if context_size else []
         batch = [texts[i] for i in indices]
         result = dict(zip(batch, translator.translate_batch(batch, context)))
         done.update(result)
         if cache:
-            cache.put_many(translator.namespace, result)
+            # Une réplique rendue telle quelle (refus) n'est pas mise en cache : elle sera
+            # retentée la prochaine fois.
+            cache.put_many(translator.namespace, {k: v for k, v in result.items() if k != v})
         if on_progress:
             on_progress(min(start + batch_size, len(todo)), len(todo))
 

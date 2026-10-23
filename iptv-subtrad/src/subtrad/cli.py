@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import tempfile
 from pathlib import Path
@@ -73,6 +74,8 @@ def cmd_regarder(args) -> int:
 
     print("Recherche des sous-titres…", file=sys.stderr)
     source = fetch_source_subtitles(args.url, args.depuis, prefer_sdh=args.sme)
+    if source.live_track:
+        return _regarder_direct(args, source)
     print(f"  {len(source.cues)} répliques ({source.origin})", file=sys.stderr)
 
     translated = translate_cues(
@@ -86,6 +89,25 @@ def cmd_regarder(args) -> int:
 
     player = make_player(args.lecteur, args.lecteur_chemin)
     return player.start(args.url, sub_path).wait()
+
+
+def _regarder_direct(args, source) -> int:
+    from .live import run_live
+    from .player import MpvPlayer
+
+    if args.lecteur != "mpv":
+        raise SystemExit(
+            "Erreur : le direct n'est géré qu'avec mpv (VLC ne permet pas d'afficher les "
+            "sous-titres au fil de l'eau). Relance avec --lecteur mpv."
+        )
+    print(f"  direct : {source.origin}", file=sys.stderr)
+    print(f"  lecture {args.marge} segments derrière le direct, le temps de traduire.",
+          file=sys.stderr)
+    player = MpvPlayer(args.lecteur_chemin, font_size=args.taille)
+    return run_live(
+        args.url, source.live_track, _translator(args), player, TranslationCache(),
+        batch_size=args.lot, segments_behind=args.marge, offset_ms=int(args.decalage * 1000),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -120,18 +142,27 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_traduire)
 
     p = sub.add_parser("regarder", parents=[translation],
-                       help="récupérer, traduire et lire un flux (replay / VOD)")
+                       help="récupérer, traduire et lire un flux (replay ou direct)")
     p.add_argument("url")
     p.add_argument("--lecteur", default="mpv", choices=["mpv", "vlc"])
     p.add_argument("--lecteur-chemin", help="chemin du binaire du lecteur")
     p.add_argument("--sme", action="store_true",
                    help="préférer les sous-titres pour sourds et malentendants")
+    live = p.add_argument_group("direct (mpv uniquement)")
+    live.add_argument("--marge", type=int, default=6,
+                      help="segments de retard sur le direct, le temps de traduire (défaut : 6)")
+    live.add_argument("--decalage", type=float, default=0.0,
+                      help="décalage des sous-titres en secondes, > 0 pour les retarder")
+    live.add_argument("--taille", type=int, default=44,
+                      help="taille du texte, pour une image de 720 px de haut (défaut : 44)")
     p.set_defaults(func=cmd_regarder)
 
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(level=logging.WARNING, format="  %(message)s")
+    logging.getLogger("subtrad").setLevel(logging.INFO)
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import extract
-from .hls import HlsClient, choose_track, lang_matches
+from .hls import HlsClient, LiveStreamDetected, SubtitleTrack, choose_track, lang_matches
 from .subtitles import Cue
 
 
@@ -17,6 +17,8 @@ class NoSubtitles(RuntimeError):
 class SourceSubtitles:
     cues: list[Cue]
     origin: str  # description lisible de la piste utilisée
+    # Direct : pas de répliques d'un bloc, la piste est à suivre en continu (live.py).
+    live_track: SubtitleTrack | None = None
 
 
 def fetch_source_subtitles(
@@ -28,7 +30,8 @@ def fetch_source_subtitles(
     """Récupère les sous-titres d'un flux dans la langue source voulue.
 
     1. Flux HLS avec pistes WebVTT séparées : le cas le plus simple et le plus rapide.
-    2. Sinon, sous-titres texte intégrés au conteneur, extraits par ffmpeg.
+       Pour un direct, renvoie seulement la piste à suivre (`live_track`).
+    2. Sinon, sous-titres texte intégrés au conteneur, extraits par ffmpeg (replay seulement).
     """
     hls = hls or HlsClient()
     errors = []
@@ -39,7 +42,11 @@ def fetch_source_subtitles(
         tracks, errors = [], [f"HLS : {exc}"]
     track = choose_track(tracks, language, prefer_sdh)
     if track:
-        return SourceSubtitles(hls.download_track(track), f"HLS {track.language} « {track.name} »")
+        origin = f"HLS {track.language} « {track.name} »"
+        try:
+            return SourceSubtitles(hls.download_track(track), origin)
+        except LiveStreamDetected:
+            return SourceSubtitles([], origin + " (direct)", live_track=track)
     if tracks:
         langs = ", ".join(sorted({t.language for t in tracks}))
         errors.append(f"HLS : aucune piste « {language} » (disponibles : {langs})")
@@ -50,6 +57,12 @@ def fetch_source_subtitles(
         embedded, errors = [], errors + [f"ffprobe : {exc}"]
     for etrack in embedded:
         if etrack.is_text and lang_matches(etrack.language, language):
+            if extract.stream_duration(url) is None:
+                # ffmpeg lirait le direct sans fin ; seul le direct HLS + WebVTT est géré.
+                raise NoSubtitles(
+                    f"Direct avec sous-titres intégrés ({etrack.codec}) : non géré pour "
+                    "l'instant, seuls les directs HLS avec pistes WebVTT le sont."
+                )
             return SourceSubtitles(
                 extract.extract_text_track(url, etrack),
                 f"piste intégrée n°{etrack.index} ({etrack.codec}, {etrack.language})",

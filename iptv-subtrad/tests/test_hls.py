@@ -2,7 +2,7 @@ import pytest
 
 from subtrad.hls import (
     HlsClient,
-    LiveStreamNotSupported,
+    LiveStreamDetected,
     choose_track,
     parse_attributes,
     parse_subtitle_tracks,
@@ -56,10 +56,20 @@ deux segments.
 
 
 class FakeResponse:
-    def __init__(self, text):
-        self.text, self.encoding = text, None
+    def __init__(self, body: bytes):
+        self.body = body
 
     def raise_for_status(self):
+        pass
+
+    def iter_content(self, chunk_size):
+        for i in range(0, len(self.body), chunk_size):
+            yield self.body[i : i + chunk_size]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
         pass
 
 
@@ -67,8 +77,9 @@ class FakeSession:
     def __init__(self, pages):
         self.pages = pages
 
-    def get(self, url, timeout=None):
-        return FakeResponse(self.pages[url])
+    def get(self, url, timeout=None, stream=False):
+        page = self.pages[url]
+        return FakeResponse(page if isinstance(page, bytes) else page.encode())
 
 
 def test_parse_attributes_with_quoted_commas():
@@ -101,9 +112,15 @@ def test_download_track_merges_segments():
     ]
 
 
-def test_live_playlist_is_rejected_for_now():
+def test_live_playlist_is_detected():
     live = SUB_PLAYLIST.replace("#EXT-X-ENDLIST\n", "")
     client = HlsClient(FakeSession({BASE + "subs/fr.m3u8": live}))
     track = parse_subtitle_tracks(MASTER, BASE + "master.m3u8")[2]
-    with pytest.raises(LiveStreamNotSupported):
+    with pytest.raises(LiveStreamDetected):
         client.download_track(track)
+
+
+def test_raw_ts_stream_is_not_read_as_a_playlist():
+    # Octet de synchro MPEG-TS (0x47) : on abandonne dès le premier bloc.
+    client = HlsClient(FakeSession({"http://iptv/chaine.ts": b"\x47" * 1_000_000}))
+    assert client.list_subtitle_tracks("http://iptv/chaine.ts") == []
