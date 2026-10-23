@@ -7,7 +7,7 @@ import requests
 
 from subtrad.gui import GuiApp, Settings, make_server
 from subtrad.store import VideoStore
-from subtrad.tmdb import EpisodeGuide, TmdbClient, search_name
+from subtrad.tmdb import EpisodeGuide, TmdbClient, search_name, tmdb_size
 from subtrad.xtream import Catalog
 
 from test_xtream import FakeXtream, make_catalog
@@ -60,6 +60,13 @@ def make_guide(tmp_path, key=KEY, fake=None, clock=lambda: 1000.0):
     return EpisodeGuide(lambda: TmdbClient(key, session) if key else None, tmp_path / "tmdb", clock=clock), fake
 
 
+def test_tmdb_image_sizes():
+    assert tmdb_size("https://image.tmdb.org/t/p/w185/abc.jpg", "w780") == "https://image.tmdb.org/t/p/w780/abc.jpg"
+    assert tmdb_size("https://image.tmdb.org/t/p/original/abc.jpg", "w300") == "https://image.tmdb.org/t/p/w300/abc.jpg"
+    assert tmdb_size("https://autre.example/w185/abc.jpg", "w780") == "https://autre.example/w185/abc.jpg"
+    assert tmdb_size("", "w780") == ""
+
+
 def test_search_names_drop_quality_and_version_marks():
     assert search_name("Sense8 2015 FHD MULTI (H.265)") == ("Sense8", "2015")
     assert search_name("Game of Thrones 2011 4K MULTI") == ("Game of Thrones", "2011")
@@ -71,7 +78,7 @@ def test_guide_finds_series_reads_seasons_and_keeps_them_30_days(tmp_path):
     guide, fake = make_guide(tmp_path)
     assert guide.find_series("Game of Thrones 2011 4K MULTI") == 1399
     season = guide.season(1399, 1)
-    assert season[1]["title"] == "L'hiver vient" and season[1]["image"].endswith("/w300/e1.jpg")
+    assert season[1]["title"] == "L'hiver vient" and season[1]["image"].endswith("/w780/e1.jpg")
     assert season[2]["title"] == ""  # « Épisode 2 » ne dit rien
     assert fake.calls[-1][1]["language"] == "fr-FR"
     assert stat.S_IMODE(os.stat(tmp_path / "tmdb" / "tv-1399-s1.json").st_mode) == 0o600
@@ -95,6 +102,7 @@ def test_catalog_completes_episodes_with_tmdb_but_keeps_provider_titles(tmp_path
     assert any(path == "/search/tv" for path, _ in fake.calls)
     assert (s1[0]["title"], s1[0]["plot"]) == ("L'hiver vient", "Ned Stark…")
     assert s1[0]["image"] == "https://image.tmdb.org/e1.jpg"  # l'image du fournisseur reste prioritaire
+    assert s1[0]["image_large"] == "https://image.tmdb.org/e1.jpg"  # pas une adresse /t/p/ : inchangée
     assert s1[1]["title"] == "" and s1[1]["air_date"] == "2011-04-24"
 
 

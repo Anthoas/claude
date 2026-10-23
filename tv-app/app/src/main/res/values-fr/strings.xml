@@ -54,4 +54,10 @@
     <string name="resume">▶ Reprendre à %1$s</string>
     <string name="from_start">Depuis le début</string>
     <string name="status_watched">Déjà vu. Les sous-titres indonésiens sont toujours là.</string>
+    <string name="prepare_translation">Préparer la traduction</string>
+    <string name="checking_subtitles">Vérification des sous-titres…</string>
+    <string name="preparing_button">Préparation… %1$d %%</string>
+    <string name="watch_id">▶ Regarder en indonésien</string>
+    <string name="watch_id_resume">▶ Reprendre en indonésien (%1$s)</string>
+    <string name="watch_fr">Regarder en français</string>
 </resources>

@@ -4,10 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,7 +44,7 @@ fun DetailScreen(
     info: DetailInfo?,
     onReady: (Int) -> Unit,
     onDeleted: (Int) -> Unit,
-    onWatch: (VideoDetails, File, Long) -> Unit,
+    onWatch: (VideoDetails, File?, Long) -> Unit, // File : sous-titres traduits ; null = en français
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -118,7 +117,7 @@ fun DetailScreen(
         val header = movie ?: info?.sheet
         val episode = info?.episode
         if (episode != null) {
-            EpisodeHeader(info.sheet?.name ?: name, info.subtitle, episode, Modifier.heightIn(max = 260.dp))
+            EpisodeHeader(info.sheet?.name ?: name, info.subtitle, episode, Modifier.fillMaxWidth())
         } else if (header != null) {
             SheetHeader(header, info?.subtitle ?: "", Modifier.height(200.dp))
         } else {
@@ -128,30 +127,47 @@ fun DetailScreen(
 
         val video = details
         val current = job
-        when {
-            video == null && error == null -> Text(stringResource(R.string.loading))
-            video == null -> Unit
-            video.ready -> {
-                Text(stringResource(if (video.watched) R.string.status_watched else R.string.status_ready),
-                     color = MaterialTheme.colorScheme.primary)
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    fun watch(startMs: Long) = action(R.string.downloading_subs) {
-                        val file = File(context.cacheDir, "subtitles/$id.srt")
-                        onWatch(video, client.downloadSubtitles(id, file), startMs)
-                    }
-                    // Commencée et pas finie : on propose de reprendre là où on s'était arrêté.
-                    val resume = video.positionMs >= 60_000 && !video.watched
-                    Button(
-                        onClick = { watch(if (resume) video.positionMs else 0L) },
-                        modifier = Modifier.focusRequester(mainButton),
-                    ) {
-                        Text(if (resume) stringResource(R.string.resume, minutesText(video.positionMs))
-                             else stringResource(R.string.watch))
-                    }
-                    if (resume) {
-                        OutlinedButton(onClick = { watch(0L) }) { Text(stringResource(R.string.from_start)) }
-                    }
-                    OutlinedButton(onClick = onBack) { Text(stringResource(R.string.back)) }
+        if (video == null) {
+            if (error == null) Text(stringResource(R.string.loading))
+        } else {
+            val running = current?.running == true
+            // Commencée et pas finie : la lecture reprend là où on s'était arrêté.
+            val startMs = if (video.positionMs >= 60_000 && !video.watched) video.positionMs else 0L
+
+            fun watchIndonesian() = action(R.string.downloading_subs) {
+                val file = File(context.cacheDir, "subtitles/$id.srt")
+                onWatch(video, client.downloadSubtitles(id, file), startMs)
+            }
+
+            // Vérifie les sous-titres puis prépare : le Mac choisit seul entre sous-titres et Whisper.
+            fun prepareTranslation() = action(R.string.prepare_translation) {
+                val result = client.check(id)
+                check = result
+                if (result.ok) job = client.prepare(id)
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Button(
+                    onClick = {
+                        when {
+                            video.ready -> watchIndonesian()
+                            running -> Unit // la préparation continue ; « Retour » pour faire autre chose
+                            else -> prepareTranslation()
+                        }
+                    },
+                    modifier = Modifier.focusRequester(mainButton),
+                ) {
+                    Text(when {
+                        video.ready && startMs > 0 -> stringResource(R.string.watch_id_resume, minutesText(startMs))
+                        video.ready -> stringResource(R.string.watch_id)
+                        running -> stringResource(R.string.preparing_button, current!!.percent)
+                        busy == R.string.prepare_translation -> stringResource(R.string.checking_subtitles)
+                        else -> stringResource(R.string.prepare_translation)
+                    })
+                }
+                OutlinedButton(onClick = { onWatch(video, null, startMs) }) { Text(stringResource(R.string.watch_fr)) }
+                OutlinedButton(onClick = onBack) { Text(stringResource(R.string.back)) }
+                if (video.ready) {
                     OutlinedButton(
                         onClick = {
                             if (!confirmDelete) {
@@ -169,53 +185,20 @@ fun DetailScreen(
                         Text(stringResource(if (confirmDelete) R.string.delete_confirm else R.string.delete))
                     }
                 }
-                if (confirmDelete) Text(stringResource(R.string.delete_help), color = Color(0xFF9CA3AF))
             }
-            current != null && current.running -> {
-                val translating = current.fetchDone || current.phase >= 2
-                Text(stringResource(if (translating) R.string.phase_translate else R.string.phase_fetch))
-                if (!current.fetchDone) ProgressBar(current.fraction, Modifier.width(720.dp))
-                if (current.found > 0) {
-                    Text(
-                        if (current.fetchDone) stringResource(R.string.progress_lines, current.translated, current.found)
-                        else stringResource(R.string.progress_lines_open, current.translated, current.found),
-                        color = Color(0xFFD1D5DB),
-                    )
-                    ProgressBar(
-                        if (current.fetchDone) current.translated.toDouble() / current.found else null,
-                        Modifier.width(720.dp),
-                    )
+            // Une ligne discrète : étape en cours, confirmation, ou ce qui n'a pas marché.
+            val gray = Color(0xFF9CA3AF)
+            val red = Color(0xFFFCA5A5)
+            when {
+                confirmDelete -> Text(stringResource(R.string.delete_help), color = gray)
+                running -> {
+                    val translating = current!!.fetchDone || current.phase >= 2
+                    Text(stringResource(if (translating) R.string.phase_translate else R.string.phase_fetch), color = gray)
+                    if (current.note.isNotBlank()) Text(current.note, color = Color(0xFFFCD34D))
                 }
-                if (current.note.isNotBlank()) Text(current.note, color = Color(0xFFFCD34D))
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // La préparation continue sur le Mac : on peut regarder autre chose en attendant.
-                    Button(onClick = onBack, modifier = Modifier.focusRequester(mainButton)) {
-                        Text(stringResource(R.string.close_background))
-                    }
-                    OutlinedButton(onClick = { action(R.string.cancel) { job = client.cancel(current.id) } }) {
-                        Text(stringResource(R.string.cancel))
-                    }
-                }
-            }
-            else -> {
-                Text(stringResource(R.string.status_not_ready), color = Color(0xFFD1D5DB))
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Button(
-                        onClick = { action(R.string.prepare) { job = client.prepare(id) } },
-                        modifier = Modifier.focusRequester(mainButton),
-                    ) { Text(stringResource(R.string.prepare)) }
-                    OutlinedButton(onClick = { action(R.string.check) { check = client.check(id) } }) {
-                        Text(stringResource(R.string.check))
-                    }
-                    OutlinedButton(onClick = onBack) { Text(stringResource(R.string.back)) }
-                }
-                check?.let {
-                    Text(it.message, color = if (it.ok) MaterialTheme.colorScheme.primary else Color(0xFFFCA5A5))
-                }
-                when (current?.state) {
-                    "error" -> Text(stringResource(R.string.error_prefix, current?.error ?: ""), color = Color(0xFFFCA5A5))
-                    "cancelled" -> Text(stringResource(R.string.cancelled), color = Color(0xFF9CA3AF))
-                }
+                current?.state == "error" -> Text(stringResource(R.string.error_prefix, current.error), color = red)
+                check?.ok == false -> Text(check!!.message, color = red)
+                video.watched -> Text(stringResource(R.string.badge_watched), color = gray)
             }
         }
         busy?.let {

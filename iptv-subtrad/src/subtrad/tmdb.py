@@ -21,12 +21,20 @@ import requests
 from .cache import default_cache_path
 
 API = "https://api.themoviedb.org/3"
-IMAGES = "https://image.tmdb.org/t/p/w300"
+IMAGES = "https://image.tmdb.org/t/p/w780"
 KEEP_SECONDS = 30 * 24 * 3600
 TIMEOUT = 20
 # Mentions de qualité ou de version dans les noms IPTV, inutiles pour chercher sur TMDB.
 _NOISE_RE = re.compile(r"\b(4K|UHD|FHD|HD|SD|3D|MULTI|VOSTFR|VOST|VF|VFF|VFQ|VO|DV)\b|\(H\.?26[45]\)|[⁴ᴷ]",
                        re.IGNORECASE)
+
+
+_SIZE_RE = re.compile(r"(https://image\.tmdb\.org/t/p/)(?:w\d+|original)/")
+
+
+def tmdb_size(url: str, size: str) -> str:
+    """Même image TMDB dans une autre taille (« w185 » → « w780 ») ; autre adresse : inchangée."""
+    return _SIZE_RE.sub(lambda m: f"{m.group(1)}{size}/", url) if url else url
 
 
 def default_tmdb_dir() -> Path:

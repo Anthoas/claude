@@ -28,7 +28,7 @@ import requests
 
 from .cache import default_cache_path
 from .playlist import Channel
-from .tmdb import EpisodeGuide
+from .tmdb import EpisodeGuide, tmdb_size
 
 REFRESH_SECONDS = 24 * 3600  # le catalogue est rechargé une fois par jour
 INFO_SECONDS = 3600  # détail d'une série gardé une heure
@@ -395,11 +395,16 @@ class Catalog:
         year = (about.get("releaseDate") or summary.get("releaseDate") or "")[:4]
         self._complete_with_tmdb(seasons, tmdb_ids, clean_name(summary.get("name", "")), year)
         titles_pending = self._translate_titles(seasons)
+        for season in seasons:  # miniature nette pour la liste, grande image pour la fiche
+            for e in season["episodes"]:
+                e["image_large"] = tmdb_size(e["image"], "w780")
+                e["image"] = tmdb_size(e["image"], "w300")
         return {
             "titles_pending": titles_pending,
             "series_id": summary.get("series_id"), "name": clean_name(summary.get("name", "")),
             "cover": self._image(about.get("cover") or summary.get("cover")),
-            "backdrop": self._image(_first(about.get("backdrop_path")) or _first(summary.get("backdrop_path"))),
+            "backdrop": tmdb_size(self._image(_first(about.get("backdrop_path")) or _first(summary.get("backdrop_path"))),
+                                  "w1280"),
             "plot": about.get("plot") or summary.get("plot") or "",
             "genre": about.get("genre") or summary.get("genre") or "",
             "cast": about.get("cast") or summary.get("cast") or "",

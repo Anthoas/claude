@@ -384,12 +384,14 @@ fun episodeTitle(episode: Episode): String {
 /** En-tête de la fiche d'un épisode : son image, ses titres, sa saison, sa durée, son résumé. */
 @Composable
 fun EpisodeHeader(seriesName: String, seasonText: String, episode: Episode, modifier: Modifier = Modifier) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-        if (episode.image.isNotBlank()) {
-            AsyncImage(model = episode.image, contentDescription = null, contentScale = ContentScale.Crop,
-                       modifier = Modifier.width(300.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)))
+    // Image à gauche (45 %), texte à droite : même hauteur à peu près, image en grande taille.
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
+        val image = episode.imageLarge.ifBlank { episode.image }
+        if (image.isNotBlank()) {
+            AsyncImage(model = image, contentDescription = null, contentScale = ContentScale.Crop,
+                       modifier = Modifier.weight(0.45f).aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)))
         }
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(0.55f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(seriesName, color = Color(0xFF9CA3AF), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(listOf(stringResource(R.string.episode_label, episode.number), episode.title)
                      .filter { it.isNotBlank() }.joinToString(" · "),
@@ -402,7 +404,8 @@ fun EpisodeHeader(seriesName: String, seasonText: String, episode: Episode, modi
                 .filter { !it.isNullOrBlank() }.joinToString(" · ")
             if (meta.isNotEmpty()) Text(meta, color = Color(0xFF9CA3AF))
             if (episode.plot.isNotBlank()) {
-                Text(episode.plot, color = Color(0xFFD1D5DB), maxLines = 6, overflow = TextOverflow.Ellipsis)
+                Text(episode.plot, color = Color(0xFFD1D5DB), maxLines = 5, overflow = TextOverflow.Ellipsis,
+                     style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

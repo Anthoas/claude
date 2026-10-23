@@ -69,6 +69,7 @@ data class Episode(
     val progress: Double = 0.0,
     val titleTranslated: String = "", // titre traduit (indonésien), « » si inconnu
     val rating: String = "",
+    val imageLarge: String = "", // même image en grand, pour la fiche
 )
 
 data class Season(val number: Int, val name: String, val episodes: List<Episode>)
@@ -207,7 +208,7 @@ class SubtradClient(address: String, private val code: String) {
                 Episode(e.optInt("id", -1), e.optInt("episode"), e.optString("title"), e.optString("duration"),
                     e.optString("air_date"), e.optString("image"), e.optBoolean("ready"), e.optString("plot"),
                     e.optBoolean("watched"), e.optDouble("progress", 0.0), e.optString("title_translated"),
-                    e.optString("rating"))
+                    e.optString("rating"), e.optString("image_large"))
             })
         })
     }

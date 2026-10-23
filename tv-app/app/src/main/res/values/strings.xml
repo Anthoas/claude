@@ -55,4 +55,10 @@
     <string name="resume">▶ Lanjutkan (%1$s)</string>
     <string name="from_start">Dari awal</string>
     <string name="status_watched">Sudah ditonton. Subtitle bahasa Indonesia masih tersedia.</string>
+    <string name="prepare_translation">Siapkan terjemahan</string>
+    <string name="checking_subtitles">Memeriksa subtitle…</string>
+    <string name="preparing_button">Menyiapkan… %1$d %%</string>
+    <string name="watch_id">▶ Tonton dalam bahasa Indonesia</string>
+    <string name="watch_id_resume">▶ Lanjutkan dalam bahasa Indonesia (%1$s)</string>
+    <string name="watch_fr">Tonton dalam bahasa Prancis</string>
 </resources>

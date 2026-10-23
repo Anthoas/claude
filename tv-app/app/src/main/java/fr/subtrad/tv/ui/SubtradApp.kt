@@ -27,7 +27,7 @@ sealed interface Screen {
     data object Home : Screen
     data class Detail(val id: Int, val name: String, val info: DetailInfo? = null) : Screen
     data class Series(val seriesId: Int, val name: String) : Screen
-    data class Player(val video: VideoDetails, val subtitles: File, val startMs: Long) : Screen
+    data class Player(val video: VideoDetails, val subtitles: File?, val startMs: Long) : Screen
 }
 
 @Composable

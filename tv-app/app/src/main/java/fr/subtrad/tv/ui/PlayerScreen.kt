@@ -56,7 +56,7 @@ import java.io.File
 @Composable
 fun PlayerScreen(
     video: VideoDetails,
-    subtitles: File,
+    subtitles: File?, // null : « regarder en français », sans sous-titres traduits
     startMs: Long,
     onProgress: (positionMs: Long, durationMs: Long, ended: Boolean) -> Unit,
     onExit: () -> Unit,
@@ -82,19 +82,18 @@ fun PlayerScreen(
             .build()
             .apply {
                 addAnalyticsListener(PlaybackLog())
-                trackSelectionParameters = trackSelectionParameters.buildUpon()
-                    .setPreferredTextLanguage(video.language)
-                    .build()
-                val track = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(subtitles))
-                    .setMimeType(MimeTypes.APPLICATION_SUBRIP)
-                    .setLanguage(video.language)
-                    .setLabel(video.subtitleLabel)
-                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                    .build()
-                setMediaItem(
-                    MediaItem.Builder().setUri(video.url).setSubtitleConfigurations(listOf(track)).build(),
-                    resumeAt,
-                )
+                val tracks = if (subtitles == null) emptyList() else {
+                    trackSelectionParameters = trackSelectionParameters.buildUpon()
+                        .setPreferredTextLanguage(video.language)
+                        .build()
+                    listOf(MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(subtitles))
+                        .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+                        .setLanguage(video.language)
+                        .setLabel(video.subtitleLabel)
+                        .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                        .build())
+                }
+                setMediaItem(MediaItem.Builder().setUri(video.url).setSubtitleConfigurations(tracks).build(), resumeAt)
                 prepare()
                 playWhenReady = true
             }
