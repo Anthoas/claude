@@ -113,7 +113,32 @@ C'est le meilleur moyen de juger la qualité de l'indonésien et la synchronisat
 - `subtrad demo --modele claude-sonnet-5-5` essaie un modèle plus puissant, mais environ 20 fois
   plus cher (voir « Coût » plus bas), pour comparer la qualité.
 
-## Étape 6 : utiliser le programme
+## Étape 6 : l'interface graphique (le plus simple)
+
+```
+subtrad gui
+```
+
+Chrome s'ouvre sur la page du programme. **Laisse la fenêtre du Terminal ouverte** tant que
+tu utilises la page ; pour tout arrêter, reviens dans le Terminal et fais **Ctrl + C**.
+
+1. **La première fois**, colle le lien M3U de ta playlist et clique sur **Charger** (une
+   grosse playlist peut prendre une minute). Elle est gardée sur ce Mac : les fois suivantes,
+   la liste s'affiche directement. Le bouton **↻ Actualiser** la retélécharge.
+2. **Cherche** dans la barre du haut : les accents et majuscules ne comptent pas, et tu peux
+   taper plusieurs mots (« diner cons »). Les onglets **Direct / Films / Séries** et la liste des
+   catégories affinent la recherche.
+3. **Sous-titres ?** vérifie, sans rien dépenser, si l'entrée a des sous-titres français
+   utilisables : ✓ en vert, c'est bon ; ✗ en rouge, la raison s'affiche.
+4. **▶ Regarder traduit** lance la traduction (une barre de progression apparaît en bas à
+   droite, avec le coût), puis ouvre mpv avec les sous-titres en indonésien.
+5. **⚙ Réglages** : clé Claude (déjà détectée si tu as fait l'étape 5), modèle (Haiku par
+   défaut), langues, et changement de playlist.
+
+Le lien de la playlist et la clé Claude sont enregistrés uniquement sur ce Mac, dans des
+fichiers que toi seul peux lire.
+
+## Étape 7 : les commandes du Terminal (pour aller plus loin)
 
 **Règle importante :** mets toujours l'adresse entre guillemets `"..."`. Sans eux, le Terminal
 coupe l'adresse au premier `&` ou `?` et rien ne fonctionne.

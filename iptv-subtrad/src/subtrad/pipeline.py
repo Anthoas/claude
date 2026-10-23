@@ -72,3 +72,45 @@ def fetch_source_subtitles(
         errors.append(f"intégrées : aucune piste texte « {language} » ({desc})")
 
     raise NoSubtitles("Aucun sous-titre exploitable trouvé.\n  " + "\n  ".join(errors))
+
+
+@dataclass
+class Compatibility:
+    ok: bool
+    message: str
+
+
+def check_subtitles(
+    url: str, language: str = "fr", hls: HlsClient | None = None
+) -> Compatibility:
+    """Dit, sans rien traduire, si `regarder` pourra exploiter les sous-titres de ce flux."""
+    hls = hls or HlsClient()
+    try:
+        tracks = hls.list_subtitle_tracks(url)
+    except Exception as exc:
+        return Compatibility(False, f"Flux inaccessible : {exc}")
+    track = choose_track(tracks, language)
+    if track:
+        return Compatibility(True, f"Sous-titres « {track.language} » trouvés ({track.name}).")
+    if tracks:
+        langs = ", ".join(sorted({t.language or "?" for t in tracks}))
+        return Compatibility(False, f"Sous-titres disponibles seulement en : {langs}.")
+
+    try:
+        embedded = extract.probe_subtitle_tracks(url, timeout=30)
+    except Exception as exc:
+        return Compatibility(False, f"Flux illisible par ffprobe ({type(exc).__name__}).")
+    wanted = [t for t in embedded if lang_matches(t.language, language)]
+    text = [t for t in wanted if t.is_text]
+    if text:
+        if extract.stream_duration(url, timeout=30) is None:
+            return Compatibility(
+                False, "Direct avec sous-titres intégrés : pas encore géré."
+            )
+        return Compatibility(True, f"Sous-titres « {language} » intégrés ({text[0].codec}).")
+    if wanted:
+        return Compatibility(False, "Sous-titres en image : il faudrait de l'OCR (pas encore géré).")
+    if embedded:
+        langs = ", ".join(sorted({t.language or "?" for t in embedded}))
+        return Compatibility(False, f"Sous-titres intégrés seulement en : {langs}.")
+    return Compatibility(False, "Aucun sous-titre dans ce flux.")

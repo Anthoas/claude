@@ -23,6 +23,9 @@ export ANTHROPIC_API_KEY=sk-ant-...
 ## Utilisation
 
 ```bash
+# Interface graphique dans Chrome : coller le lien M3U, rechercher, vérifier, regarder
+subtrad gui
+
 # Lister les chaînes d'une playlist M3U (URL ou fichier local)
 subtrad chaines ma_playlist.m3u --filtre arte
 
@@ -101,6 +104,7 @@ répliques ID ──► replay : fichier .srt ──► player.py (mpv ou VLC, -
 | `live.py` | direct : suivi de la playlist, traduction au fil de l'eau, affichage synchronisé |
 | `player.py` | lancement de mpv (pilotage par IPC, surimpression) ou VLC |
 | `pipeline.py` | enchaînement : trouver la bonne piste puis la récupérer |
+| `gui.py`, `gui.html` | interface graphique : serveur local (127.0.0.1, jeton de session) et page web |
 
 ## Limites actuelles et prochaines étapes
 

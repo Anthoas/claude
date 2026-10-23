@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import sqlite3
+import threading
 from pathlib import Path
 
 
@@ -18,7 +19,9 @@ class TranslationCache:
         path = Path(path) if path else default_cache_path()
         if str(path) != ":memory:":
             path.parent.mkdir(parents=True, exist_ok=True)
-        self._db = sqlite3.connect(str(path))
+        # Partagé entre threads (mode direct, interface graphique) : un verrou sérialise l'accès.
+        self._db = sqlite3.connect(str(path), check_same_thread=False)
+        self._lock = threading.Lock()
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS translations (key TEXT PRIMARY KEY, text TEXT NOT NULL)"
         )
@@ -29,16 +32,17 @@ class TranslationCache:
 
     def get_many(self, namespace: str, texts: list[str]) -> dict[str, str]:
         found = {}
-        for text in set(texts):
-            row = self._db.execute(
-                "SELECT text FROM translations WHERE key = ?", (self.key(namespace, text),)
-            ).fetchone()
-            if row:
-                found[text] = row[0]
+        with self._lock:
+            for text in set(texts):
+                row = self._db.execute(
+                    "SELECT text FROM translations WHERE key = ?", (self.key(namespace, text),)
+                ).fetchone()
+                if row:
+                    found[text] = row[0]
         return found
 
     def put_many(self, namespace: str, pairs: dict[str, str]) -> None:
-        with self._db:
+        with self._lock, self._db:
             self._db.executemany(
                 "INSERT OR REPLACE INTO translations (key, text) VALUES (?, ?)",
                 [(self.key(namespace, src), dst) for src, dst in pairs.items()],

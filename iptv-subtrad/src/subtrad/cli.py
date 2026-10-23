@@ -153,11 +153,23 @@ def _regarder_direct(args, source) -> int:
         _print_usage(translator)
 
 
+def cmd_gui(args) -> int:
+    from .gui import run_gui
+
+    return run_gui(port=args.port, open_browser=not args.sans_navigateur)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="subtrad", description="Traduit les sous-titres d'un flux IPTV avec Claude."
     )
     sub = parser.add_subparsers(dest="commande", required=True)
+
+    p = sub.add_parser("gui", help="ouvrir l'interface graphique dans Chrome")
+    p.add_argument("--port", type=int, default=8765, help="port local (défaut : 8765)")
+    p.add_argument("--sans-navigateur", action="store_true",
+                   help="ne pas ouvrir le navigateur automatiquement")
+    p.set_defaults(func=cmd_gui)
 
     p = sub.add_parser("chaines", help="lister les chaînes d'une playlist M3U")
     p.add_argument("playlist", help="URL ou fichier .m3u")

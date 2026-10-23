@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>subtrad</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #11151c; --panel: #1a2029; --panel-2: #222a35; --line: #2e3845;
+    --text: #e8edf3; --muted: #95a1b2; --accent: #4f9cf9; --accent-text: #08111f;
+    --ok: #4cc38a; --ko: #f0716b; --warn: #e8b04b; --radius: 10px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f4f6f9; --panel: #ffffff; --panel-2: #eef1f5; --line: #d9dee6;
+            --text: #18202b; --muted: #5d6878; --accent: #1f6fe0; --accent-text: #ffffff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px;
+           padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 18px; font-weight: 650; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header .spacer { flex: 1; }
+  main { max-width: 1000px; margin: 0 auto; padding: 20px 16px 140px; }
+  button, select, input { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--line); background: var(--panel-2);
+           border-radius: 8px; padding: 7px 12px; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .55; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text);
+                   font-weight: 600; }
+  input[type=text], input[type=password], input[type=search], select {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+  .error { color: var(--ko); }
+
+  #setup h2 { margin-top: 0; }
+  #setup .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+  #setup input[type=text] { flex: 1; min-width: 240px; }
+
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  #q { flex: 1; min-width: 220px; font-size: 16px; padding: 10px 12px; }
+  .tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .tabs button { border: 0; border-radius: 0; background: var(--panel); }
+  .tabs button[aria-pressed=true] { background: var(--accent); color: var(--accent-text); }
+  #group { max-width: 260px; }
+  #count { margin: 6px 2px 10px; }
+
+  #list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .item { display: grid; grid-template-columns: 48px 1fr auto; gap: 12px; align-items: center;
+          background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+  .logo { width: 48px; height: 36px; border-radius: 6px; background: var(--panel-2);
+          display: grid; place-items: center; overflow: hidden; color: var(--muted); font-size: 16px; font-weight: 650; }
+  .logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .name { font-weight: 600; overflow-wrap: anywhere; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px;
+           border: 1px solid var(--line); margin-right: 6px; color: var(--text); }
+  .status { font-size: 13px; margin-top: 3px; }
+  .status.ok { color: var(--ok); } .status.ko { color: var(--ko); }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  #more { display: block; margin: 14px auto 0; }
+
+  #jobs { position: fixed; right: 16px; bottom: 16px; width: min(380px, calc(100vw - 32px));
+          display: grid; gap: 8px; z-index: 10; }
+  .job { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent);
+         border-radius: var(--radius); padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+  .job.done { border-left-color: var(--ok); } .job.error { border-left-color: var(--ko); }
+  .job .title { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+  .job .close { border: 0; background: none; padding: 0 4px; color: var(--muted); }
+  .bar { height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; margin: 6px 0; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+
+  dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+           color: var(--text); width: min(520px, calc(100vw - 32px)); padding: 20px; }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  dialog h2 { margin-top: 0; }
+  dialog label { display: block; margin: 12px 0 4px; font-weight: 600; }
+  dialog input, dialog select { width: 100%; }
+  dialog .hint { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  dialog .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--muted);
+             border-top-color: transparent; border-radius: 50%; animation: spin .8s linear infinite;
+             vertical-align: -2px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 600px) {
+    .item { grid-template-columns: 40px 1fr; }
+    .actions { grid-column: 1 / -1; justify-content: flex-start; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>subtrad</h1>
+  <span class="sub">sous-titres traduits par Claude</span>
+  <span class="spacer"></span>
+  <button id="refresh" class="hidden" title="Retélécharger la playlist">↻ Actualiser</button>
+  <button id="open-settings">⚙ Réglages</button>
+</header>
+
+<main>
+  <section id="setup" class="card hidden">
+    <h2>Pour commencer : ta playlist</h2>
+    <p class="muted">Colle le lien M3U fourni par ton service, ou choisis un fichier .m3u enregistré sur ce Mac.
+      Il reste enregistré sur ce Mac uniquement.</p>
+    <div class="row">
+      <input id="source" type="text" placeholder="https://…/playlist.m3u" autocomplete="off" spellcheck="false">
+      <button id="load" class="primary">Charger</button>
+    </div>
+    <div class="row">
+      <label class="muted">ou un fichier : <input id="file" type="file" accept=".m3u,.m3u8,text/plain"></label>
+    </div>
+    <p id="setup-msg" class="muted"></p>
+  </section>
+
+  <section id="browse" class="hidden">
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="Rechercher une chaîne, un film, une série…" autocomplete="off">
+    </div>
+    <div class="toolbar">
+      <div class="tabs" role="group" aria-label="Type">
+        <button data-kind="" aria-pressed="true">Tout</button>
+        <button data-kind="direct" aria-pressed="false">Direct</button>
+        <button data-kind="film" aria-pressed="false">Films</button>
+        <button data-kind="serie" aria-pressed="false">Séries</button>
+      </div>
+      <select id="group" aria-label="Catégorie"><option value="">Toutes les catégories</option></select>
+    </div>
+    <p id="count" class="muted"></p>
+    <ul id="list"></ul>
+    <button id="more" class="hidden">Afficher plus</button>
+  </section>
+</main>
+
+<div id="jobs" aria-live="polite"></div>
+
+<dialog id="settings">
+  <h2>Réglages</h2>
+  <label for="api-key">Clé Claude (API)</label>
+  <input id="api-key" type="password" autocomplete="off" placeholder="sk-ant-…">
+  <div id="api-key-hint" class="hint"></div>
+  <label for="model">Modèle de traduction</label>
+  <select id="model"></select>
+  <label for="depuis">Langue des sous-titres d'origine</label>
+  <select id="depuis">
+    <option value="fr">Français</option><option value="en">Anglais</option>
+  </select>
+  <label for="vers">Traduire vers</label>
+  <select id="vers">
+    <option value="id">Indonésien</option><option value="en">Anglais</option><option value="fr">Français</option>
+  </select>
+  <label>Playlist</label>
+  <button id="change-playlist" type="button">Changer de playlist…</button>
+  <div class="buttons">
+    <button id="cancel-settings" type="button">Annuler</button>
+    <button id="save-settings" class="primary" type="button">Enregistrer</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+const TOKEN = "__TOKEN__";
+const PAGE = 100;
+const state = { q: "", kind: "", group: "", offset: 0, total: 0, settings: null };
+const $ = (sel) => document.querySelector(sel);
+
+async function api(path, body) {
+  const opts = { headers: { "X-Subtrad-Token": TOKEN } };
+  if (body !== undefined) {
+    opts.method = "POST";
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const resp = await fetch(path, opts);
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.error || `Erreur ${resp.status}`);
+  return data;
+}
+
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  Object.assign(node, props);
+  for (const child of children) if (child != null) node.append(child);
+  return node;
+}
+
+const fmt = (n) => n.toLocaleString("fr-FR");
+
+// --- Démarrage ---------------------------------------------------------------
+
+async function init() {
+  const s = await api("/api/state");
+  state.settings = s;
+  if (!s.count) {
+    showSetup();
+  } else {
+    showBrowse(s);
+  }
+  if (!s.has_api_key) openSettings();
+  pollJobs();
+}
+
+function showSetup(message = "") {
+  $("#setup").classList.remove("hidden");
+  $("#browse").classList.add("hidden");
+  $("#refresh").classList.add("hidden");
+  $("#setup-msg").textContent = message;
+  $("#source").focus();
+}
+
+async function showBrowse(s) {
+  $("#setup").classList.add("hidden");
+  $("#browse").classList.remove("hidden");
+  $("#refresh").classList.toggle("hidden", !s.has_playlist_source);
+  for (const btn of document.querySelectorAll(".tabs button")) {
+    const n = btn.dataset.kind ? s.kinds[btn.dataset.kind] : s.count;
+    btn.textContent = `${btn.textContent.split(" (")[0]} (${fmt(n)})`;
+    btn.disabled = !n;
+  }
+  await loadGroups();
+  await search();
+  $("#q").focus();
+}
+
+async function loadPlaylist(body, label) {
+  const msg = $("#setup-msg");
+  msg.className = "muted";
+  msg.replaceChildren(el("span", { className: "spinner" }), `Chargement de ${label}… (une grosse playlist peut prendre une minute)`);
+  $("#load").disabled = true;
+  try {
+    const r = await api("/api/playlist", body);
+    msg.textContent = `${fmt(r.count)} entrées chargées.`;
+    const s = await api("/api/state");
+    state.settings = s;
+    await showBrowse(s);
+  } catch (e) {
+    msg.className = "error";
+    msg.textContent = e.message;
+  } finally {
+    $("#load").disabled = false;
+  }
+}
+
+$("#load").addEventListener("click", () => {
+  const source = $("#source").value.trim();
+  if (source) loadPlaylist({ source }, "la playlist");
+});
+$("#source").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#load").click(); });
+$("#file").addEventListener("change", async () => {
+  const file = $("#file").files[0];
+  if (file) loadPlaylist({ text: await file.text() }, file.name);
+});
+$("#refresh").addEventListener("click", async () => {
+  const btn = $("#refresh");
+  btn.disabled = true;
+  btn.textContent = "↻ Actualisation…";
+  try {
+    await api("/api/playlist/refresh", {});
+    await showBrowse(await api("/api/state"));
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "↻ Actualiser";
+  }
+});
+
+// --- Recherche ---------------------------------------------------------------
+
+async function loadGroups() {
+  const groups = await api(`/api/groups?kind=${encodeURIComponent(state.kind)}`);
+  const select = $("#group");
+  select.replaceChildren(el("option", { value: "", textContent: "Toutes les catégories" }),
+    ...groups.map((g) => el("option", { value: g.name, textContent: `${g.name} (${fmt(g.count)})` })));
+  if (groups.some((g) => g.name === state.group)) select.value = state.group;
+  else state.group = "";
+}
+
+let searchSeq = 0;
+async function search(append = false) {
+  const seq = ++searchSeq;
+  if (!append) state.offset = 0;
+  const params = new URLSearchParams({ q: state.q, kind: state.kind, group: state.group,
+                                       offset: state.offset, limit: PAGE });
+  const r = await api(`/api/search?${params}`);
+  if (seq !== searchSeq) return; // une frappe plus récente a déjà relancé la recherche
+  state.total = r.total;
+  const list = $("#list");
+  if (!append) list.replaceChildren();
+  list.append(...r.items.map(renderItem));
+  state.offset += r.items.length;
+  $("#count").textContent = r.total ? `${fmt(r.total)} résultat${r.total > 1 ? "s" : ""}` : "Aucun résultat.";
+  $("#more").classList.toggle("hidden", state.offset >= r.total);
+}
+
+function renderItem(item) {
+  const initial = (item.name.trim()[0] || "?").toUpperCase();
+  const logo = el("div", { className: "logo", textContent: initial });
+  if (item.logo) {
+    const img = el("img", { src: item.logo, alt: "", loading: "lazy", referrerPolicy: "no-referrer" });
+    // L'initiale reste affichée tant que le logo n'est pas chargé (ou s'il est introuvable).
+    img.style.display = "none";
+    img.addEventListener("load", () => { img.style.display = ""; logo.replaceChildren(img); });
+    img.addEventListener("error", () => img.remove());
+    logo.append(img);
+  }
+  const status = el("div", { className: "status" });
+  const check = el("button", { textContent: "Sous-titres ?", title: "Vérifier si ce flux a des sous-titres utilisables" });
+  const watch = el("button", { className: "primary", textContent: "▶ Regarder traduit" });
+  check.addEventListener("click", () => checkItem(item, check, status));
+  watch.addEventListener("click", () => watchItem(item, watch));
+  return el("li", { className: "item" },
+    logo,
+    el("div", {},
+      el("div", { className: "name", textContent: item.name }),
+      el("div", { className: "meta" }, el("span", { className: "badge", textContent: item.kind_label }), item.group),
+      status),
+    el("div", { className: "actions" }, check, watch));
+}
+
+async function checkItem(item, button, status) {
+  button.disabled = true;
+  status.className = "status muted";
+  status.replaceChildren(el("span", { className: "spinner" }), "Vérification…");
+  try {
+    const r = await api("/api/check", { id: item.id });
+    status.className = `status ${r.ok ? "ok" : "ko"}`;
+    status.textContent = `${r.ok ? "✓" : "✗"} ${r.message}`;
+  } catch (e) {
+    status.className = "status ko";
+    status.textContent = e.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function watchItem(item, button) {
+  button.disabled = true;
+  try {
+    await api("/api/watch", { id: item.id });
+    pollJobs();
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    setTimeout(() => { button.disabled = false; }, 1500);
+  }
+}
+
+let debounce;
+$("#q").addEventListener("input", () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(() => { state.q = $("#q").value; search(); }, 150);
+});
+for (const btn of document.querySelectorAll(".tabs button")) {
+  btn.addEventListener("click", async () => {
+    for (const b of document.querySelectorAll(".tabs button")) b.setAttribute("aria-pressed", b === btn);
+    state.kind = btn.dataset.kind;
+    await loadGroups();
+    search();
+  });
+}
+$("#group").addEventListener("change", () => { state.group = $("#group").value; search(); });
+$("#more").addEventListener("click", () => search(true));
+
+// --- Lectures en cours ---------------------------------------------------------
+
+const hiddenJobs = new Set();
+let pollTimer;
+async function pollJobs() {
+  clearTimeout(pollTimer);
+  let jobs = [];
+  try { jobs = await api("/api/jobs"); } catch { /* serveur arrêté */ }
+  renderJobs(jobs.filter((j) => !hiddenJobs.has(j.id)));
+  const active = jobs.some((j) => j.state === "running" || j.state === "playing");
+  pollTimer = setTimeout(pollJobs, active ? 1000 : 5000);
+}
+
+function renderJobs(jobs) {
+  $("#jobs").replaceChildren(...jobs.slice(0, 4).map((job) => {
+    const close = el("button", { className: "close", textContent: "×", title: "Masquer" });
+    close.addEventListener("click", () => { hiddenJobs.add(job.id); pollJobs(); });
+    const card = el("div", { className: `job ${job.state}` },
+      el("div", { className: "title" }, el("span", { textContent: job.title }), close));
+    if (job.state === "running") {
+      card.append(el("div", { className: "muted" }, el("span", { className: "spinner" }), job.step));
+    } else {
+      card.append(el("div", { className: job.state === "error" ? "error" : "muted",
+                              textContent: job.state === "error" ? `Erreur : ${job.error}` : job.step }));
+    }
+    if (job.total && job.state === "running") {
+      const bar = el("div", { className: "bar" }, el("div"));
+      bar.firstChild.style.width = `${Math.round((100 * job.done) / job.total)}%`;
+      card.append(bar, el("div", { className: "muted", textContent: `${fmt(job.done)} / ${fmt(job.total)} répliques` }));
+    }
+    if (job.usage) card.append(el("div", { className: "muted", textContent: job.usage }));
+    return card;
+  }));
+}
+
+// --- Réglages ------------------------------------------------------------------
+
+function openSettings() {
+  const s = state.settings;
+  $("#model").replaceChildren(...Object.entries(s.models).map(([id, label]) =>
+    el("option", { value: id, textContent: label })));
+  $("#model").value = s.model;
+  $("#depuis").value = s.depuis;
+  $("#vers").value = s.vers;
+  $("#api-key").value = "";
+  $("#api-key-hint").textContent = s.has_api_key
+    ? (s.api_key_from_env ? "Clé trouvée dans la configuration du Terminal. Laisse vide pour la garder."
+                          : "Une clé est enregistrée. Laisse vide pour la garder.")
+    : "Aucune clé : crée-la sur console.anthropic.com (rubrique API Keys) et colle-la ici.";
+  $("#settings").showModal();
+}
+
+$("#open-settings").addEventListener("click", openSettings);
+$("#cancel-settings").addEventListener("click", () => $("#settings").close());
+$("#save-settings").addEventListener("click", async () => {
+  try {
+    state.settings = { ...state.settings, ...await api("/api/settings", {
+      api_key: $("#api-key").value.trim(), model: $("#model").value,
+      depuis: $("#depuis").value, vers: $("#vers").value,
+    }) };
+    $("#settings").close();
+  } catch (e) {
+    alert(e.message);
+  }
+});
+$("#change-playlist").addEventListener("click", () => { $("#settings").close(); showSetup(); });
+
+init().catch((e) => showSetup(`Impossible de joindre le programme : ${e.message}`));
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
@@ -25,6 +26,17 @@ class Channel:
     @property
     def logo(self) -> str:
         return self.attrs.get("tvg-logo", "")
+
+    @property
+    def kind(self) -> str:
+        """« film », « serie » ou « direct », d'après le chemin de l'URL (convention des
+        serveurs IPTV : /movie/... et /series/...)."""
+        path = urlparse(self.url).path.lower()
+        if "/movie/" in path:
+            return "film"
+        if "/series/" in path:
+            return "serie"
+        return "direct"
 
 
 def _split_extinf(line: str) -> tuple[str, str]:
@@ -65,12 +77,25 @@ def parse_m3u(text: str) -> list[Channel]:
     return channels
 
 
-def load_playlist(source: str, timeout: float = 30.0) -> list[Channel]:
-    """Charge une playlist depuis une URL http(s) ou un fichier local."""
-    if source.startswith(("http://", "https://")):
-        resp = requests.get(source, timeout=timeout)
+# Les grosses playlists peuvent peser des dizaines de Mo et être lentes à générer.
+PLAYLIST_TIMEOUT = (15, 180)  # (connexion, lecture) en secondes
+MAX_PLAYLIST_BYTES = 300_000_000
+
+
+def fetch_playlist_text(source: str) -> str:
+    """Texte d'une playlist, depuis une URL http(s) ou un fichier local."""
+    if not source.startswith(("http://", "https://")):
+        return Path(source).read_text(encoding="utf-8", errors="replace")
+    with requests.get(source, timeout=PLAYLIST_TIMEOUT, stream=True) as resp:
         resp.raise_for_status()
-        text = resp.text
-    else:
-        text = Path(source).read_text(encoding="utf-8", errors="replace")
-    return parse_m3u(text)
+        body = bytearray()
+        for chunk in resp.iter_content(chunk_size=1 << 20):
+            body += chunk
+            if len(body) > MAX_PLAYLIST_BYTES:
+                raise ValueError("Playlist trop volumineuse (plus de 300 Mo).")
+    return body.decode("utf-8", errors="replace")
+
+
+def load_playlist(source: str) -> list[Channel]:
+    """Charge une playlist depuis une URL http(s) ou un fichier local."""
+    return parse_m3u(fetch_playlist_text(source))

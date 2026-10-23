@@ -142,3 +142,22 @@ def test_cost_unknown_for_unlisted_model():
     translator.translate_batch(["Bonjour."], [])
     assert translator.estimated_cost() is None
     assert "coût" not in translator.usage_summary()
+
+
+def test_cache_can_be_used_from_another_thread(tmp_path):
+    import threading
+
+    cache = TranslationCache(tmp_path / "cache.sqlite")
+    errors = []
+
+    def worker():
+        try:
+            cache.put_many("ns", {"Bonjour.": "Halo."})
+            assert cache.get_many("ns", ["Bonjour."]) == {"Bonjour.": "Halo."}
+        except Exception as exc:  # pragma: no cover - c'est l'échec qu'on teste
+            errors.append(exc)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join()
+    assert errors == []
