@@ -263,6 +263,13 @@ Exemple : `subtrad regarder "adresse" --decalage -1 --marge 8`
 
 Pour VLC, installe-le d'abord avec `brew install --cask vlc`.
 
+## Dans VLC : la bonne piste de sous-titres
+
+À l'ouverture, VLC affiche **directement la piste « Indonésien (traduit) »** : tu n'as rien à
+choisir. Les sous-titres d'origine du fichier (français, anglais, « forcés »…) restent dans le menu
+**Sous-titres > Piste de sous-titres**, mais VLC n'en affiche **qu'une à la fois**, donc à l'écran il
+n'y a que l'indonésien. Cette liste est celle du fichier : VLC ne permet pas de la masquer.
+
 ## Rien n'est refait deux fois
 
 Le programme **garde** ce qu'il a fait pour chaque vidéo, dans `~/.cache/subtrad/videos/` :

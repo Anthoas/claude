@@ -109,6 +109,7 @@ class MpvPlayer:
         title: str | None = None,
         live_segments_behind: int | None = None,
         hide_original_subs: bool = False,
+        subtitle_label: str | None = None,  # ignoré : mpv affiche le nom du fichier
     ):
         """Lance mpv. `live_segments_behind` active le mode direct : la lecture démarre
         ce nombre de segments derrière le direct, pour laisser à la traduction le temps
@@ -186,10 +187,15 @@ class VlcPlayer:
             self.process.terminate()
 
     def start(self, url: str, subtitle: str | Path | None = None, title: str | None = None,
-              **_ignored):
+              subtitle_label: str | None = None, **_ignored):
         args = [self.binary]
         if subtitle:
-            args.append(f"--sub-file={subtitle}")
+            # VLC sélectionne tout seul une piste ajoutée avec --sub-file (vérifié : elle passe
+            # devant la piste intégrée « par défaut »). On lui donne un vrai nom dans le menu au
+            # lieu de « Track 4 », et on l'empêche d'aller chercher d'autres fichiers .srt.
+            args += [f"--sub-file={subtitle}", "--no-sub-autodetect-file"]
+            if subtitle_label:
+                args.append(f"--sub-description={subtitle_label}")
         if title:
             args.append(f"--meta-title={title}")
         self.process = subprocess.Popen(args + [url])

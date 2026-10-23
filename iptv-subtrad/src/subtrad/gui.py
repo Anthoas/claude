@@ -49,6 +49,7 @@ PLAYERS = {
     "mpv": "mpv : démarrage rapide, la vidéo commence pendant la traduction",
 }
 PLAYER_NAMES = {"vlc": "VLC", "mpv": "mpv"}
+LANGUAGE_LABELS = {"id": "Indonésien", "en": "Anglais", "fr": "Français"}
 TRANSLATION_WORKERS = 4  # lots envoyés à Claude en même temps
 READY_CUES = 10  # démarrage rapide : répliques traduites avant d'ouvrir la vidéo
 
@@ -357,6 +358,11 @@ class GuiApp:
             if translator is not None:
                 job.usage = translator.usage_summary()
 
+    def _subtitle_label(self) -> str:
+        """Nom de la piste dans le menu du lecteur, ex. « Indonésien (traduit) »."""
+        vers = self.settings["vers"]
+        return f"{LANGUAGE_LABELS.get(vers, vers)} (traduit)"
+
     def _start_player(self, job: Job, name: str, url: str, **kwargs):
         player = self.make_player(name)
         self._players[job.id] = player
@@ -372,7 +378,8 @@ class GuiApp:
         job.note = "Sous-titres déjà prêts (traduits lors d'un essai précédent) : aucun coût."
         job.state = "playing"
         job.step = f"Lecture en cours dans {PLAYER_NAMES[name]}."
-        player = self._start_player(job, name, channel.url, subtitle=path, title=channel.name)
+        player = self._start_player(job, name, channel.url, subtitle=path, title=channel.name,
+                                    subtitle_label=self._subtitle_label())
         player.wait()
         if cancelled.is_set():
             raise Cancelled()
@@ -436,7 +443,8 @@ class GuiApp:
         name = f"sous-titres.{self.settings['vers']}.srt"
         sub_path = Path(tempfile.mkdtemp(prefix="subtrad-")) / name
         save_subtitles(translated, sub_path)
-        player = self._start_player(job, "vlc", channel.url, subtitle=sub_path, title=channel.name)
+        player = self._start_player(job, "vlc", channel.url, subtitle=sub_path, title=channel.name,
+                                    subtitle_label=self._subtitle_label())
         job.state, job.phase, job.step = "playing", 3, "Lecture en cours dans VLC."
         player.wait()
 
