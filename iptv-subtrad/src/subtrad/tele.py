@@ -135,6 +135,8 @@ class _TvHandler(BaseHTTPRequestHandler):
                 return self._json(app.ready_videos(min(int(params.get("limit", 200)), 500)))
             if (method, path) == ("GET", "/tele/api/video"):
                 return self._json(app.video_for_tv(int(params["id"])))
+            if (method, path) == ("GET", "/tele/api/jobs"):
+                return self._json(app.jobs_for_tv())
             if (method, path) == ("GET", "/tele/api/job"):
                 return self._json(app.job_for_tv(str(params["id"])))
             if (method, path) == ("GET", "/tele/api/subtitles"):

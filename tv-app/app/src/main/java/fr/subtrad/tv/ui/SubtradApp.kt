@@ -34,7 +34,7 @@ fun SubtradApp(prefs: Prefs) {
     val stack = remember { mutableStateListOf<Screen>(if (client == null) Screen.Setup else Screen.Home) }
     val scope = rememberCoroutineScope()
     // La liste et la recherche survivent à l'ouverture d'une vidéo.
-    val home = remember { HomeState(scope) }
+    val home = remember { HomeState(scope, prefs) }
 
     fun push(screen: Screen) = stack.add(screen)
     fun pop() = stack.removeAt(stack.lastIndex)

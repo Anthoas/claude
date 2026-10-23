@@ -341,6 +341,12 @@ class GuiApp:
                 return job_public(job)
         return job_public(self.watch(index, target="tele"))
 
+    def jobs_for_tv(self, limit: int = 20) -> list[dict]:
+        """Préparations demandées par la télé, les plus récentes d'abord : la télé peut fermer la
+        fiche d'une vidéo et suivre son avancement depuis la liste."""
+        jobs = [j for j in reversed(list(self.jobs.values())) if j.target == "tele"]
+        return [job_public(j) for j in jobs[:limit]]
+
     def job_for_tv(self, job_id: str) -> dict:
         job = self.jobs.get(job_id)
         if job is None or job.target != "tele":

@@ -74,11 +74,13 @@ fun DetailScreen(
     LaunchedEffect(id) {
         try {
             details = client.video(id)
+            // Préparation lancée plus tôt et laissée en arrière-plan : on la retrouve.
+            if (details?.ready == false) job = client.jobs().firstOrNull { it.videoId == id && it.running }
         } catch (e: Exception) {
             error = e
         }
     }
-    LaunchedEffect(details?.ready) { if (details != null) runCatching { mainButton.requestFocus() } }
+    LaunchedEffect(details?.ready, job?.running) { if (details != null) runCatching { mainButton.requestFocus() } }
 
     // Suivi de la préparation : le Mac est interrogé toutes les secondes.
     LaunchedEffect(job?.id) {
@@ -163,10 +165,15 @@ fun DetailScreen(
                     )
                 }
                 if (current.note.isNotBlank()) Text(current.note, color = Color(0xFFFCD34D))
-                OutlinedButton(
-                    onClick = { action(R.string.cancel) { job = client.cancel(current.id) } },
-                    modifier = Modifier.focusRequester(mainButton),
-                ) { Text(stringResource(R.string.cancel)) }
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // La préparation continue sur le Mac : on peut regarder autre chose en attendant.
+                    Button(onClick = onBack, modifier = Modifier.focusRequester(mainButton)) {
+                        Text(stringResource(R.string.close_background))
+                    }
+                    OutlinedButton(onClick = { action(R.string.cancel) { job = client.cancel(current.id) } }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
             }
             else -> {
                 Text(stringResource(R.string.status_not_ready), color = Color(0xFFD1D5DB))

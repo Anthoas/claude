@@ -28,6 +28,10 @@
     <string name="cancel">Batal</string>
     <string name="back">Kembali</string>
     <string name="delete">Hapus</string>
+    <string name="close_background">Tutup (lanjut di latar belakang)</string>
+    <string name="badge_preparing">⏳ %1$d %%</string>
+    <string name="preparing_hint">Sedang disiapkan di Mac…</string>
+    <string name="recent_searches">Pencarian terakhir:</string>
     <string name="delete_confirm">Yakin? Tekan lagi untuk menghapus</string>
     <string name="delete_help">Terjemahan akan dihapus dari Mac. Untuk menonton lagi, video harus disiapkan ulang.</string>
     <string name="status_ready">Subtitle bahasa Indonesia sudah siap.</string>

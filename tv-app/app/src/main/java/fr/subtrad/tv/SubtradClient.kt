@@ -36,6 +36,8 @@ data class CheckResult(val ok: Boolean, val message: String)
 /** Une préparation (récupération et traduction) qui tourne sur le Mac. */
 data class Job(
     val id: String,
+    val videoId: Int,
+    val title: String,
     val state: String, // running | done | error | cancelled
     val phase: Int,
     val fetchDone: Boolean,
@@ -46,6 +48,14 @@ data class Job(
     val error: String,
 ) {
     val running get() = state == "running" || state == "playing"
+
+    /** Avancement global en pour cent : lecture du fichier, puis traduction. */
+    val percent: Int
+        get() = when {
+            fetchDone && found > 0 -> 50 + 50 * translated / found
+            fraction != null -> (50 * fraction).toInt()
+            else -> 0
+        }.coerceIn(0, 100)
 }
 
 /** Erreur renvoyée par le Mac ; `status` vaut 0 quand le Mac n'a pas pu être joint. */
@@ -87,6 +97,12 @@ class SubtradClient(address: String, private val code: String) {
 
     suspend fun job(id: String): Job = job(getJson("/tele/api/job?id=${enc(id)}"))
 
+    /** Préparations demandées par la télé, les plus récentes d'abord. */
+    suspend fun jobs(): List<Job> = withContext(Dispatchers.IO) {
+        val array = org.json.JSONArray(requestText("/tele/api/jobs"))
+        (0 until array.length()).map { job(array.getJSONObject(it)) }
+    }
+
     /** Supprime la traduction gardée sur le Mac (vidéo déjà regardée). */
     suspend fun forget(id: Int) {
         postJson("/tele/api/forget", JSONObject().put("id", id))
@@ -123,7 +139,8 @@ class SubtradClient(address: String, private val code: String) {
     }
 
     private fun job(o: JSONObject) = Job(
-        id = o.getString("id"), state = o.getString("state"), phase = o.optInt("phase", 1),
+        id = o.getString("id"), videoId = o.optInt("channel_id", -1), title = o.optString("title"),
+        state = o.getString("state"), phase = o.optInt("phase", 1),
         fetchDone = o.optBoolean("fetch_done"),
         fraction = if (o.isNull("fraction")) null else o.optDouble("fraction"),
         found = o.optInt("found"), translated = o.optInt("translated"),
@@ -133,6 +150,18 @@ class SubtradClient(address: String, private val code: String) {
     private suspend fun getJson(path: String): JSONObject = request(path, "GET", null)
 
     private suspend fun postJson(path: String, body: JSONObject): JSONObject = request(path, "POST", body)
+
+    private suspend fun requestText(path: String): String = withContext(Dispatchers.IO) {
+        val connection = open(path, "GET")
+        try {
+            checkStatus(connection)
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } catch (e: IOException) {
+            throw SubtradException(0, e.message ?: "réseau")
+        } finally {
+            connection.disconnect()
+        }
+    }
 
     private suspend fun request(path: String, method: String, body: JSONObject?): JSONObject =
         withContext(Dispatchers.IO) {

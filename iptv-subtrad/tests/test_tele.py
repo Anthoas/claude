@@ -120,6 +120,9 @@ def test_tv_flow_search_prepare_and_get_subtitles(tele):
 
     job = session.post(base + "/tele/api/prepare", json={"id": item["id"]}).json()
     assert job["target"] == "tele" and "channel_url" not in job
+    listed = session.get(base + "/tele/api/jobs").json()
+    assert [(j["id"], j["channel_id"]) for j in listed] == [(job["id"], item["id"])]
+    assert "channel_url" not in listed[0]
     job = wait_job(base, session, job["id"])
     assert job["state"] == "done", job
     assert (job["found"], job["translated"], job["saved"], job["player"]) == (3, 3, True, "")

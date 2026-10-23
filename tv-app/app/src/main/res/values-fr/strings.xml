@@ -27,6 +27,10 @@
     <string name="cancel">Annuler</string>
     <string name="back">Retour</string>
     <string name="delete">Supprimer</string>
+    <string name="close_background">Fermer (continue en arrière-plan)</string>
+    <string name="badge_preparing">⏳ %1$d %%</string>
+    <string name="preparing_hint">En préparation sur le Mac…</string>
+    <string name="recent_searches">Recherches récentes :</string>
     <string name="delete_confirm">Sûr ? Appuie encore pour supprimer</string>
     <string name="delete_help">La traduction sera effacée du Mac. Pour revoir la vidéo, il faudra la préparer à nouveau.</string>
     <string name="status_ready">Les sous-titres indonésiens sont prêts.</string>

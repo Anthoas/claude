@@ -124,6 +124,7 @@ l'application Android TV. La page du Mac reste limitée à 127.0.0.1.
 | `GET /tele/api/video?id=` | détails d'une vidéo, **adresse du flux comprise** |
 | `POST /tele/api/check` `{"id"}` | sous-titres disponibles ? (sans frais) |
 | `POST /tele/api/prepare` `{"id"}` | préparer (réutilise une préparation en cours) |
+| `GET /tele/api/jobs` | préparations demandées par la télé (20 dernières, `channel_id` = vidéo) |
 | `GET /tele/api/job?id=` | avancement d'une préparation |
 | `POST /tele/api/cancel` `{"id"}` | annuler une préparation |
 | `POST /tele/api/forget` `{"id"}` | supprimer une vidéo prête (traduction et sous-titres d'origine) |

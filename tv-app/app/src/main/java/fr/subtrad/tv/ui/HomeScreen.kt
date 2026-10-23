@@ -7,12 +7,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,18 +34,20 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
+import fr.subtrad.tv.Prefs
 import fr.subtrad.tv.R
 import fr.subtrad.tv.SubtradClient
 import fr.subtrad.tv.VideoItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val TAB_READY = 0
 private val TAB_KINDS = listOf("", "film", "serie")
 
 /** Liste et recherche de l'accueil, gardées pendant qu'une vidéo est ouverte. */
-class HomeState(private val scope: CoroutineScope) {
+class HomeState(private val scope: CoroutineScope, private val prefs: Prefs) {
     private var client: SubtradClient? = null
     private var loadJob: Job? = null
     val items = mutableStateListOf<VideoItem>()
@@ -58,6 +62,35 @@ class HomeState(private val scope: CoroutineScope) {
     var error by mutableStateOf<Throwable?>(null)
         private set
     var lastOpened = -1 // ligne à qui rendre le focus au retour d'une vidéo
+    val recent = mutableStateListOf<String>().apply { addAll(prefs.recentSearches) }
+    /** Préparations en cours sur le Mac, par vidéo (suivies même fiche fermée). */
+    val preparing = mutableStateMapOf<Int, fr.subtrad.tv.Job>()
+
+    /** Met à jour les préparations ; une vidéo qui vient d'être prête passe en « ✓ ». */
+    suspend fun refreshJobs(): Boolean {
+        val c = client ?: return false
+        val jobs = try { c.jobs() } catch (e: Exception) { return preparing.isNotEmpty() }
+        val running = jobs.filter { it.running }.associateBy { it.videoId }
+        val finished = preparing.keys - running.keys
+        preparing.clear()
+        preparing.putAll(running)
+        for (id in finished) {
+            if (jobs.any { it.videoId == id && it.state == "done" }) markReady(id)
+        }
+        if (finished.isNotEmpty() && tab == TAB_READY) load()
+        return running.isNotEmpty()
+    }
+
+    /** Lignes « en préparation » ajoutées en tête de « Siap ditonton ». */
+    fun preparingItems(): List<VideoItem> =
+        if (tab != TAB_READY) emptyList()
+        else preparing.values.filter { j -> items.none { it.id == j.videoId } }
+            .map { VideoItem(it.videoId, it.title, "", "", ready = false) }
+
+    fun searchRecent(query: String) {
+        this.query = query
+        search()
+    }
 
     fun attach(c: SubtradClient) {
         client = c
@@ -85,6 +118,11 @@ class HomeState(private val scope: CoroutineScope) {
     fun search() {
         if (tab == TAB_READY) tab = 1
         lastOpened = -1
+        if (query.isNotBlank()) {
+            prefs.addRecentSearch(query)
+            recent.clear()
+            recent.addAll(prefs.recentSearches)
+        }
         load()
     }
 
@@ -143,6 +181,12 @@ fun HomeScreen(state: HomeState, onOpen: (VideoItem) -> Unit, onSettings: () -> 
         state.onShown()
         runCatching { if (state.lastOpened >= 0) rowFocus.requestFocus() else tabFocus.requestFocus() }
     }
+    // Avancement des préparations : toutes les 3 s s'il y en a, sinon toutes les 20 s.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(if (state.refreshJobs()) 3_000 else 20_000)
+        }
+    }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 27.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -167,6 +211,16 @@ fun HomeScreen(state: HomeState, onOpen: (VideoItem) -> Unit, onSettings: () -> 
             OutlinedButton(onClick = onSettings) { Text(stringResource(R.string.settings_button)) }
         }
 
+        if (state.recent.isNotEmpty()) {
+            Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.recent_searches), color = Color(0xFF9CA3AF))
+                state.recent.forEach { q ->
+                    OutlinedButton(onClick = { state.searchRecent(q) }) { Text(q, maxLines = 1) }
+                }
+            }
+        }
+
         val status = when {
             state.loading && state.items.isEmpty() -> stringResource(R.string.loading)
             state.error != null -> errorMessage(state.error!!)
@@ -183,6 +237,15 @@ fun HomeScreen(state: HomeState, onOpen: (VideoItem) -> Unit, onSettings: () -> 
         }
 
         LazyColumn(state = state.listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            items(state.preparingItems(), key = { "p${it.id}" }) { item ->
+                ListItem(
+                    selected = false,
+                    onClick = { onOpen(item) },
+                    headlineContent = { Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    supportingContent = { Text(stringResource(R.string.preparing_hint), maxLines = 1) },
+                    trailingContent = { PreparingBadge(state.preparing[item.id]) },
+                )
+            }
             itemsIndexed(state.items, key = { _, item -> item.id }) { index, item ->
                 ListItem(
                     selected = false,
@@ -193,7 +256,11 @@ fun HomeScreen(state: HomeState, onOpen: (VideoItem) -> Unit, onSettings: () -> 
                     headlineContent = { Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     supportingContent = { Text(item.group, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     trailingContent = {
-                        if (item.ready) Text(stringResource(R.string.badge_ready), color = MaterialTheme.colorScheme.primary)
+                        val job = state.preparing[item.id]
+                        when {
+                            item.ready -> Text(stringResource(R.string.badge_ready), color = MaterialTheme.colorScheme.primary)
+                            job != null -> PreparingBadge(job)
+                        }
                     },
                     modifier = if (index == state.lastOpened) Modifier.focusRequester(rowFocus) else Modifier,
                 )
@@ -208,4 +275,9 @@ fun HomeScreen(state: HomeState, onOpen: (VideoItem) -> Unit, onSettings: () -> 
             }
         }
     }
+}
+
+@Composable
+private fun PreparingBadge(job: fr.subtrad.tv.Job?) {
+    Text(stringResource(R.string.badge_preparing, job?.percent ?: 0), color = Color(0xFFFCD34D))
 }
