@@ -2,6 +2,7 @@ import json
 import os
 import socket
 import sys
+import tempfile
 import threading
 
 import pytest
@@ -141,8 +142,9 @@ def test_ass_escape():
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="socket Unix")
-def test_mpv_ipc_skips_events_and_matches_request_id(tmp_path):
-    path = str(tmp_path / "mpv.sock")
+def test_mpv_ipc_skips_events_and_matches_request_id():
+    # Pas tmp_path : sur Mac son chemin dépasse la limite de 104 caractères des sockets Unix.
+    path = os.path.join(tempfile.mkdtemp(prefix="subtrad-"), "mpv.sock")
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind(path)
     server.listen(1)
@@ -166,3 +168,4 @@ def test_mpv_ipc_skips_events_and_matches_request_id(tmp_path):
     ipc.close()
     server.close()
     os.unlink(path)
+    os.rmdir(os.path.dirname(path))
