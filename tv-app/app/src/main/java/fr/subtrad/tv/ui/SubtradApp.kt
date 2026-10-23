@@ -83,10 +83,8 @@ fun SubtradApp(prefs: Prefs) {
                         client = c, seriesId = screen.seriesId, name = screen.name,
                         memory = seriesMemory.getOrPut(screen.seriesId) { SeriesMemory() },
                         preparing = home.preparing,
-                        onEpisode = { episode, sheet, label ->
-                            // Résumé de l'épisode (TMDB) s'il existe, sinon celui de la série.
-                            val shown = if (episode.plot.isNotBlank()) sheet.copy(plot = episode.plot) else sheet
-                            push(Screen.Detail(episode.id, sheet.name, DetailInfo(shown, label, null)))
+                        onEpisode = { episode, sheet, seasonText ->
+                            push(Screen.Detail(episode.id, sheet.name, DetailInfo(sheet, seasonText, null, episode)))
                         },
                     )
                 }

@@ -2,6 +2,7 @@ import json
 import os
 import stat
 import threading
+import time
 
 import pytest
 import requests
@@ -245,6 +246,7 @@ def test_tv_catalog_endpoints(tele):
     detail = session.get(base + "/tele/api/catalog/series/info", params={"id": 77}).json()
     first = detail["seasons"][0]["episodes"][0]
     assert first["id"] == 0 and first["ready"] is True and first["watched"] is False
+    assert first["title_translated"] == ""  # pas de titre, rien à traduire
 
     # La télé signale où en est la lecture ; « Vu » au-delà de 90 %.
     saved = session.post(base + "/tele/api/progress", json={"id": 0, "position": 600_000, "duration": 3_600_000}).json()
@@ -264,3 +266,58 @@ def test_tv_catalog_endpoints(tele):
     for secret in ("MONUSER", "MONMDP", "portal.example", "stream.example"):
         assert secret not in everything
     assert requests.Session().get(base + "/tele/api/catalog").status_code in (401, 403)
+
+
+def test_episode_titles_are_translated_once(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)  # la clé du Terminal ne compte pas ici
+    calls = []
+
+    class CountingTranslator(FakeTranslator):
+        def translate_batch(self, texts, context):
+            calls.append(list(texts))
+            return super().translate_batch(texts, context)
+
+    cache = TranslationCache(tmp_path / "t.sqlite")
+    app = GuiApp(Settings(tmp_path / "config"), tmp_path / "cache" / "playlist.m3u",
+                 translator_factory=lambda s: CountingTranslator(), cache_factory=lambda: cache,
+                 whisper_backend=lambda: None, store=VideoStore(tmp_path / "videos"),
+                 catalog=make_catalog(tmp_path)[0])
+    app.catalog.title_translator = app.translate_titles
+    assert app.translate_titles(["L'hiver vient"]) == {}  # pas de clé Claude : rien
+    app.settings.update(api_key="sk-ant-test")
+    app.catalog._info[77] = (1000.0, {**SERIES_INFO, "episodes": {"1": [
+        {"id": "1001", "episode_num": 1, "title": "|FR| GoT - S01 E01 - L'hiver vient", "info": {}},
+        {"id": "1002", "episode_num": 2, "title": "|FR| GoT - S01 E02 - La route royale", "info": {}}]}})
+    eps = app.catalog.series_detail(77)["seasons"][0]["episodes"]
+    assert [e["title_translated"] for e in eps] == ["ID L'hiver vient", "ID La route royale"]
+    app.catalog.series_detail(77)
+    assert calls == [["L'hiver vient", "La route royale"]]  # la 2e ouverture ne coûte rien
+
+
+def test_episode_titles_are_translated_in_the_background(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    release = threading.Event()
+
+    class SlowTranslator(FakeTranslator):
+        def translate_batch(self, texts, context):
+            release.wait(5)
+            return super().translate_batch(texts, context)
+
+    cache = TranslationCache(tmp_path / "t.sqlite")
+    app = GuiApp(Settings(tmp_path / "config"), tmp_path / "cache" / "playlist.m3u",
+                 translator_factory=lambda s: SlowTranslator(), cache_factory=lambda: cache,
+                 whisper_backend=lambda: None, store=VideoStore(tmp_path / "videos"),
+                 catalog=make_catalog(tmp_path)[0])
+    app.catalog.title_translator = app.translate_titles_soon
+    app.settings.update(api_key="sk-ant-test")
+    app.catalog._info[77] = (1000.0, {**SERIES_INFO, "episodes": {"1": [
+        {"id": "1001", "episode_num": 1, "title": "|FR| GoT - S01 E01 - L'hiver vient", "info": {}}]}})
+    first = app.catalog.series_detail(77)  # répond tout de suite, sans attendre Claude
+    assert first["titles_pending"] is True and first["seasons"][0]["episodes"][0]["title_translated"] == ""
+    release.set()
+    for _ in range(100):
+        later = app.catalog.series_detail(77)
+        if not later["titles_pending"]:
+            break
+        time.sleep(0.05)
+    assert later["seasons"][0]["episodes"][0]["title_translated"] == "ID L'hiver vient"

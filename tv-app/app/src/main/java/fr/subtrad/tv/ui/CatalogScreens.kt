@@ -256,7 +256,7 @@ fun SeriesScreen(
     name: String,
     memory: SeriesMemory,
     preparing: Map<Int, Job>,
-    onEpisode: (Episode, Sheet, String) -> Unit,
+    onEpisode: (episode: Episode, series: Sheet, seasonText: String) -> Unit,
 ) {
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var error by remember { mutableStateOf<Throwable?>(null) }
@@ -271,6 +271,12 @@ fun SeriesScreen(
                 // Première ouverture : saison et épisode à regarder ensuite.
                 memory.season = sheet!!.nextSeason.coerceIn(0, maxOf(0, seasons.lastIndex))
                 memory.episode = sheet!!.nextEpisode
+            }
+            // Titres en indonésien traduits en arrière-plan sur le Mac : on redemande la fiche.
+            var tries = 0
+            while (sheet?.titlesPending == true && tries++ < 20) {
+                kotlinx.coroutines.delay(3_000)
+                sheet = runCatching { client.seriesSheet(seriesId) }.getOrNull() ?: sheet
             }
         } catch (e: Exception) {
             error = e
@@ -306,17 +312,14 @@ fun SeriesScreen(
                     }
                     LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         itemsIndexed(season.episodes) { index, episode ->
-                            val label = listOf(seasonLabel(season.number, season.name),
-                                               stringResource(R.string.episode_label, episode.number), episode.title,
-                                               episode.duration)
-                                .filter { it.isNotBlank() }.joinToString(" · ")
+                            val seasonText = seasonLabel(season.number, season.name)
                             val focus = if (index == maxOf(memory.episode, 0)) Modifier.focusRequester(firstFocus) else Modifier
                             ListItem(
                                 selected = false,
                                 enabled = episode.id >= 0,
                                 onClick = {
                                     memory.episode = index
-                                    onEpisode(episode, s, label)
+                                    onEpisode(episode, s, seasonText)
                                 },
                                 leadingContent = {
                                     Box(Modifier.width(128.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp))
@@ -334,9 +337,7 @@ fun SeriesScreen(
                                     }
                                 },
                                 headlineContent = {
-                                    val title = listOf(stringResource(R.string.episode_label, episode.number), episode.title)
-                                        .filter { it.isNotBlank() }.joinToString(" · ")
-                                    Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(episodeTitle(episode), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 },
                                 supportingContent = {
                                     val meta = listOf(episode.duration, episode.airDate)
@@ -371,3 +372,38 @@ fun SeriesScreen(
 fun seasonLabel(number: Int, providerName: String): String =
     if (number == 0) providerName.ifBlank { stringResource(R.string.season_specials) }
     else stringResource(R.string.season_label, number)
+
+/** « Épisode 1 · L'hiver vient (Musim Dingin Akan Tiba) ». */
+@Composable
+fun episodeTitle(episode: Episode): String {
+    val translated = episode.titleTranslated.takeIf { it.isNotBlank() && it != episode.title }?.let { "($it)" }
+    return listOf(stringResource(R.string.episode_label, episode.number), episode.title)
+        .filter { it.isNotBlank() }.joinToString(" · ") + (translated?.let { " $it" } ?: "")
+}
+
+/** En-tête de la fiche d'un épisode : son image, ses titres, sa saison, sa durée, son résumé. */
+@Composable
+fun EpisodeHeader(seriesName: String, seasonText: String, episode: Episode, modifier: Modifier = Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        if (episode.image.isNotBlank()) {
+            AsyncImage(model = episode.image, contentDescription = null, contentScale = ContentScale.Crop,
+                       modifier = Modifier.width(300.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)))
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(seriesName, color = Color(0xFF9CA3AF), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(listOf(stringResource(R.string.episode_label, episode.number), episode.title)
+                     .filter { it.isNotBlank() }.joinToString(" · "),
+                 style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (episode.titleTranslated.isNotBlank() && episode.titleTranslated != episode.title) {
+                Text("(${episode.titleTranslated})", color = MaterialTheme.colorScheme.primary)
+            }
+            val meta = listOf(seasonText, episode.duration, episode.airDate,
+                              episode.rating.takeIf { it.isNotBlank() && it != "0" }?.let { "★ $it" })
+                .filter { !it.isNullOrBlank() }.joinToString(" · ")
+            if (meta.isNotEmpty()) Text(meta, color = Color(0xFF9CA3AF))
+            if (episode.plot.isNotBlank()) {
+                Text(episode.plot, color = Color(0xFFD1D5DB), maxLines = 6, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}

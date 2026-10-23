@@ -247,6 +247,9 @@ class GuiApp:
         self.tv = None  # TvAccess, branché par run_gui
         self.guide = EpisodeGuide(self._tmdb_client)
         self.catalog = catalog or Catalog(self._xtream_client, lambda: self.library.channels, guide=self.guide)
+        self.catalog.title_translator = self.translate_titles_soon
+        self._titles_lock = threading.Lock()
+        self._titles_running: set[str] = set()  # titres en cours de traduction (arrière-plan)
         if playlist_cache.exists():
             self.library.load_text(playlist_cache.read_text(encoding="utf-8", errors="replace"))
 
@@ -308,6 +311,50 @@ class GuiApp:
         """Oublie les sous-titres gardés pour cette vidéo (pour tout refaire)."""
         self.store.forget(*self._store_args(self.library.get(index)))
         return {"ready": False}
+
+    def translate_titles(self, texts: list[str]) -> dict[str, str]:
+        """Titres d'épisodes traduits (ex. en indonésien), avec la mémoire de traduction des
+        sous-titres : chaque titre n'est payé qu'une fois. Sans clé Claude : rien."""
+        texts = [t for t in dict.fromkeys(texts) if t and t.strip()]
+        if not texts or not self.settings.api_key() or self.settings["depuis"] == self.settings["vers"]:
+            return {}
+        translator = self.make_translator(self.settings)
+        cache = self.make_cache()
+        done = cache.get_many(translator.namespace, texts)
+        todo = [t for t in texts if t not in done]
+        for start in range(0, len(todo), 60):
+            batch = todo[start:start + 60]
+            new = {k: v for k, v in zip(batch, translator.translate_batch(batch, [])) if v and v != k}
+            cache.put_many(translator.namespace, new)
+            done.update(new)
+        return done
+
+    def translate_titles_soon(self, texts: list[str]) -> tuple[dict[str, str], bool]:
+        """Comme translate_titles, sans faire attendre la télé : renvoie tout de suite les titres
+        déjà traduits et lance les autres en arrière-plan. (traduits, traduction en cours ?)"""
+        texts = [t for t in dict.fromkeys(texts) if t and t.strip()]
+        if not texts or not self.settings.api_key() or self.settings["depuis"] == self.settings["vers"]:
+            return {}, False
+        translator = self.make_translator(self.settings)
+        done = self.make_cache().get_many(translator.namespace, texts)
+        todo = [t for t in texts if t not in done]
+        if not todo:
+            return done, False
+        with self._titles_lock:
+            todo = [t for t in todo if t not in self._titles_running]
+            self._titles_running.update(todo)
+        if todo:
+            def work() -> None:
+                try:
+                    self.translate_titles(todo)
+                except Exception:
+                    pass  # réseau, refus : le titre restera en français
+                finally:
+                    with self._titles_lock:
+                        self._titles_running.difference_update(todo)
+
+            threading.Thread(target=work, name="subtrad-titres", daemon=True).start()
+        return done, True
 
     def _tmdb_client(self) -> TmdbClient | None:
         key = self.settings["tmdb_key"]

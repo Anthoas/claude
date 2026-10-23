@@ -67,6 +67,8 @@ data class Episode(
     val plot: String = "",
     val watched: Boolean = false,
     val progress: Double = 0.0,
+    val titleTranslated: String = "", // titre traduit (indonésien), « » si inconnu
+    val rating: String = "",
 )
 
 data class Season(val number: Int, val name: String, val episodes: List<Episode>)
@@ -85,6 +87,7 @@ data class Sheet(
     val seasons: List<Season>,
     val nextSeason: Int = 0, // saison et épisode (indices) à proposer
     val nextEpisode: Int = 0,
+    val titlesPending: Boolean = false, // titres traduits en cours (à redemander)
 )
 
 /** Une préparation (récupération et traduction) qui tourne sur le Mac. */
@@ -203,7 +206,8 @@ class SubtradClient(address: String, private val code: String) {
                 val e = eps.getJSONObject(j)
                 Episode(e.optInt("id", -1), e.optInt("episode"), e.optString("title"), e.optString("duration"),
                     e.optString("air_date"), e.optString("image"), e.optBoolean("ready"), e.optString("plot"),
-                    e.optBoolean("watched"), e.optDouble("progress", 0.0))
+                    e.optBoolean("watched"), e.optDouble("progress", 0.0), e.optString("title_translated"),
+                    e.optString("rating"))
             })
         })
     }
@@ -223,6 +227,7 @@ class SubtradClient(address: String, private val code: String) {
         seasons = seasons,
         nextSeason = o.optJSONObject("next")?.optInt("season") ?: 0,
         nextEpisode = o.optJSONObject("next")?.optInt("episode") ?: 0,
+        titlesPending = o.optBoolean("titles_pending"),
     )
 
     /** Télécharge le .srt traduit dans `target` (le lecteur le lit ensuite depuis la télé). */

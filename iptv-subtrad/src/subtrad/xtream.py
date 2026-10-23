@@ -198,6 +198,9 @@ class Catalog:
     ):
         self._client_factory = client_factory
         self.guide = guide
+        # Traduction des titres d'épisodes (branchée par GuiApp ; None : titres non traduits).
+        # Renvoie {titre: traduction}, ou ({titre: traduction}, traduction en cours ?).
+        self.title_translator: Callable[[list[str]], object] | None = None
         self._channels = channels
         self.directory = Path(directory) if directory else default_catalog_dir()
         self._clock = clock
@@ -391,7 +394,9 @@ class Catalog:
                             "name": names.get(str(number)) or f"Saison {number}", "episodes": items})
         year = (about.get("releaseDate") or summary.get("releaseDate") or "")[:4]
         self._complete_with_tmdb(seasons, tmdb_ids, clean_name(summary.get("name", "")), year)
+        titles_pending = self._translate_titles(seasons)
         return {
+            "titles_pending": titles_pending,
             "series_id": summary.get("series_id"), "name": clean_name(summary.get("name", "")),
             "cover": self._image(about.get("cover") or summary.get("cover")),
             "backdrop": self._image(_first(about.get("backdrop_path")) or _first(summary.get("backdrop_path"))),
@@ -426,6 +431,23 @@ class Catalog:
                     e["plot"] = e["plot"] or more["plot"]
                     e["image"] = e["image"] or more["image"]
                     e["air_date"] = e["air_date"] or more["air_date"]
+
+    def _translate_titles(self, seasons: list[dict]) -> bool:
+        """« title_translated » : le titre dans la langue de la traduction (indonésien).
+        Renvoie True si des traductions arrivent bientôt (la télé redemande la fiche)."""
+        episodes = [e for s in seasons for e in s["episodes"]]
+        for e in episodes:
+            e["title_translated"] = ""
+        if self.title_translator is None:
+            return False
+        try:
+            result = self.title_translator([e["title"] for e in episodes if e["title"]])
+        except Exception:
+            return False  # pas de clé, réseau, refus : les titres restent en français
+        done, pending = result if isinstance(result, tuple) else (result, False)
+        for e in episodes:
+            e["title_translated"] = done.get(e["title"], "")
+        return pending
 
     def movie_detail(self, vod_id: int, status: Status | None = None) -> dict:
         data = self._ensure()

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -115,7 +116,10 @@ fun DetailScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         val header = movie ?: info?.sheet
-        if (header != null) {
+        val episode = info?.episode
+        if (episode != null) {
+            EpisodeHeader(info.sheet?.name ?: name, info.subtitle, episode, Modifier.heightIn(max = 260.dp))
+        } else if (header != null) {
             SheetHeader(header, info?.subtitle ?: "", Modifier.height(200.dp))
         } else {
             Text(name, style = MaterialTheme.typography.headlineLarge)
@@ -222,7 +226,12 @@ fun DetailScreen(
 }
 
 /** En-tête d'une fiche venue du catalogue : fiche de la série (épisode) ou numéro du film. */
-data class DetailInfo(val sheet: Sheet?, val subtitle: String, val vodId: Int?)
+data class DetailInfo(
+    val sheet: Sheet?,
+    val subtitle: String,
+    val vodId: Int?,
+    val episode: fr.subtrad.tv.Episode? = null, // fiche d'un épisode : son image, ses titres, son résumé
+)
 
 /** « 23 min » ou « 1 h 05 ». */
 fun minutesText(ms: Long): String {
