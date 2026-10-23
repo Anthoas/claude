@@ -83,21 +83,19 @@ Si tu modifies ou mets à jour le programme plus tard, relance dans ce dossier :
 ## Étape 4 bis : installer Whisper (pour les vidéos sans sous-titres)
 
 Whisper transcrit la voix des vidéos qui n'ont pas de sous-titres en texte. Il tourne **sur ton
-Mac**, gratuitement ; seule la traduction reste payante. Dans le dossier `iptv-subtrad` (comme à
-l'étape 4), tape :
+Mac**, gratuitement ; seule la traduction reste payante. Une seule commande :
 
 ```
-pipx install --force ".[whisper]"
+brew install whisper-cpp
 ```
 
-(guillemets compris). L'installation est longue (plusieurs minutes, ~1 Go). Au **premier**
-usage, Whisper télécharge en plus son modèle (~1,6 Go), une seule fois.
+C'est tout : pas de `pipx` à relancer. Au **premier** usage, le programme télécharge le modèle
+de Whisper (~550 Mo, une seule fois) ; la progression s'affiche dans la page.
 
 - Sur un Mac à puce Apple (M1, M2, M3, M4 : menu  > « À propos de ce Mac »), Whisper utilise la
   puce graphique et va vite. Sur un Mac Intel il fonctionne aussi, mais plus lentement.
 - Pour l'essayer seul, sans rien traduire : `subtrad transcrire "chemin ou adresse de la vidéo"`.
   Il écrit un fichier `transcription.fr.srt`.
-- Si l'installation affiche une erreur, copie-la-moi.
 
 ## Étape 5 : obtenir la clé d'accès à Claude
 
@@ -236,8 +234,7 @@ Quand je corrige ou améliore le programme, refais ceci :
 1. Retélécharge le ZIP (étape 1) et décompresse-le.
 2. Dans le Terminal : `cd ` (avec une espace), glisse le **nouveau** dossier `iptv-subtrad`
    dans la fenêtre, puis Entrée.
-3. Tape `pipx install --force ".[whisper]"` (avec Whisper, voir l'étape 4 bis) ou
-   `pipx install --force .` (sans Whisper), puis Entrée.
+3. Tape `pipx install --force .` (n'oublie pas le point) et Entrée.
 
 ## Dans mpv
 
@@ -275,7 +272,7 @@ Pour VLC, installe-le d'abord avec `brew install --cask vlc`.
 | Erreur « authentication » / « API key » | Clé mal copiée ou Terminal non rouvert | Refaire l'étape 5 |
 | « mpv introuvable » | Installation incomplète | `brew install mpv`, puis rouvrir le Terminal |
 | « vlc introuvable » | VLC n'est pas installé | `brew install --cask vlc` (ou choisir mpv dans les réglages) |
-| « Whisper n'est pas installé » | Étape 4 bis non faite | Faire l'étape 4 bis, ou désactiver Whisper dans les réglages |
+| « Whisper n'est pas installé » | Étape 4 bis non faite | `brew install whisper-cpp`, ou désactiver Whisper dans les réglages |
 | « Aucun sous-titre exploitable trouvé » | La chaîne n'expose pas de sous-titres texte | Voir « Limites » |
 | Une erreur longue en rouge | Variable | Copie le message complet et envoie-le moi |
 

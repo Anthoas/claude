@@ -1,25 +1,35 @@
 """Transcription de la voix avec Whisper, pour les vidéos sans sous-titres en texte.
 
-Tout se passe sur ce Mac (aucun coût) : ffmpeg lit le son, on le découpe en morceaux
+Tout se passe sur cette machine (aucun coût) : ffmpeg lit le son, on le découpe en morceaux
 d'environ 30 s aux moments de silence, Whisper les transcrit, puis on en fait des
 sous-titres lisibles à l'écran. Les répliques sortent au fur et à mesure, pour être
 traduites pendant que la transcription continue.
 
 Deux moteurs, choisis automatiquement :
-- mlx-whisper sur les Mac à puce Apple (M1, M2...) : rapide, utilise la puce graphique ;
-- faster-whisper ailleurs (Mac Intel, Linux, Windows) : sur le processeur, plus lent.
+- whisper.cpp (`brew install whisper-cpp` sur Mac) : programme déjà compilé, rapide, qui
+  utilise la puce graphique des Mac Apple ; aucune dépendance Python. Le modèle (~570 Mo)
+  est téléchargé au premier usage ;
+- faster-whisper (extra `.[whisper]`), pour les autres systèmes.
 """
 
 from __future__ import annotations
 
 import importlib.util
-import platform
+import json
+import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import unicodedata
+import wave
+from array import array
+from pathlib import Path
 from typing import Callable, Iterator, NamedTuple, Protocol
+
+import requests
 
 from .errors import Cancelled
 from .extract import _require, kill_when_cancelled
@@ -31,10 +41,10 @@ SEARCH_SECONDS = 8.0  # on cherche un silence dans les 8 dernières secondes du 
 MAX_CHARS_PER_CUE = 84  # deux lignes de ~42 caractères
 MAX_CHARS_PER_LINE = 42
 
-DEFAULT_MODELS = {
-    "mlx": "mlx-community/whisper-large-v3-turbo",  # ~1,6 Go, téléchargé au premier usage
-    "faster-whisper": "small",
-}
+WHISPER_CPP_BINARIES = ("whisper-cli", "whisper-cpp")  # nom selon la version de whisper.cpp
+WHISPER_CPP_MODEL = "ggml-large-v3-turbo-q5_0.bin"  # ~570 Mo, bon compromis qualité / vitesse
+WHISPER_CPP_MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{name}"
+FASTER_WHISPER_MODEL = "small"
 
 # Phrases que Whisper invente sur des silences ou de la musique (en français surtout).
 _HALLUCINATIONS = (
@@ -42,6 +52,8 @@ _HALLUCINATIONS = (
     "sous-titrage fr", "merci d'avoir regarde", "abonnez-vous", "n'oubliez pas de vous abonner",
     "sous-titres par", "transcription par", "thanks for watching",
 )
+
+StatusCallback = Callable[[str, "float | None"], None]
 
 
 class WhisperUnavailable(RuntimeError):
@@ -59,39 +71,101 @@ class Segment(NamedTuple):
 class Transcriber(Protocol):
     name: str
 
-    def transcribe(self, audio, language: str) -> list[Segment]:
-        """`audio` : tableau numpy float32, mono, 16 kHz."""
+    def transcribe(self, audio: bytes, language: str) -> list[Segment]:
+        """`audio` : son mono 16 kHz, entiers 16 bits petit-boutistes (PCM s16le)."""
         ...
 
 
-def backend_name() -> str | None:
-    """Moteur Whisper installé et utilisable sur cette machine, ou None."""
-    apple_silicon = sys.platform == "darwin" and platform.machine() == "arm64"
-    if apple_silicon and importlib.util.find_spec("mlx_whisper"):
-        return "mlx"
-    if importlib.util.find_spec("faster_whisper"):
-        return "faster-whisper"
+# --- whisper.cpp ---------------------------------------------------------------------------
+
+
+def find_whisper_cpp() -> str | None:
+    for name in WHISPER_CPP_BINARIES:
+        found = shutil.which(name)
+        if found:
+            return found
+    for directory in ("/opt/homebrew/bin", "/usr/local/bin"):  # Homebrew hors du PATH
+        for name in WHISPER_CPP_BINARIES:
+            candidate = Path(directory) / name
+            if candidate.exists():
+                return str(candidate)
     return None
 
 
-class MlxTranscriber:
-    name = "mlx"
+def models_dir() -> Path:
+    base = os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache"
+    return Path(base) / "subtrad" / "whisper"
 
-    def __init__(self, model: str | None = None):
-        self.model = model or DEFAULT_MODELS["mlx"]
 
-    def transcribe(self, audio, language: str) -> list[Segment]:
-        import mlx_whisper
+def ensure_model(name: str = WHISPER_CPP_MODEL, on_status: StatusCallback | None = None,
+                 url: str | None = None) -> Path:
+    """Chemin du modèle whisper.cpp, téléchargé une seule fois s'il manque."""
+    path = models_dir() / name
+    if path.exists() and path.stat().st_size > 0:
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(path.name + ".part")
+    with requests.get(url or WHISPER_CPP_MODEL_URL.format(name=name), stream=True,
+                      timeout=(15, 120)) as resp:
+        resp.raise_for_status()
+        total = int(resp.headers.get("Content-Length") or 0)
+        done = 0
+        with open(partial, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=1 << 20):
+                f.write(chunk)
+                done += len(chunk)
+                if on_status and total:
+                    on_status(f"Téléchargement du modèle Whisper (une seule fois) : "
+                              f"{done / total:.0%} de {total / 1e6:.0f} Mo", done / total)
+                elif on_status:
+                    on_status(f"Téléchargement du modèle Whisper (une seule fois) : "
+                              f"{done / 1e6:.0f} Mo", None)
+    partial.replace(path)
+    return path
 
-        result = mlx_whisper.transcribe(
-            audio, path_or_hf_repo=self.model, language=language,
-            condition_on_previous_text=False, verbose=None,
-        )
+
+class WhisperCppTranscriber:
+    name = "whisper.cpp"
+
+    def __init__(self, model: str | None = None, binary: str | None = None,
+                 model_url: str | None = None):
+        self.binary = binary or find_whisper_cpp()
+        if not self.binary:
+            raise WhisperUnavailable("whisper.cpp introuvable : brew install whisper-cpp")
+        self.model_name = model or WHISPER_CPP_MODEL
+        self.model_url = model_url
+        self.model_path: Path | None = None
+        self.threads = max(1, min(8, os.cpu_count() or 4))
+
+    def prepare(self, on_status: StatusCallback | None = None) -> None:
+        if self.model_path is None:
+            self.model_path = ensure_model(self.model_name, on_status, self.model_url)
+
+    def transcribe(self, audio: bytes, language: str) -> list[Segment]:
+        self.prepare()
+        with tempfile.TemporaryDirectory(prefix="subtrad-whisper-") as tmp:
+            wav_path, out_base = Path(tmp) / "morceau.wav", Path(tmp) / "resultat"
+            with wave.open(str(wav_path), "wb") as wav:
+                wav.setnchannels(1)
+                wav.setsampwidth(2)
+                wav.setframerate(SAMPLE_RATE)
+                wav.writeframes(audio)
+            result = subprocess.run(
+                [self.binary, "-m", str(self.model_path), "-f", str(wav_path), "-l", language,
+                 "-t", str(self.threads), "-oj", "-of", str(out_base), "-np"],
+                capture_output=True, text=True, errors="replace",
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"whisper.cpp a échoué : {result.stderr.strip()[-300:]}")
+            data = json.loads(out_base.with_suffix(".json").read_text(encoding="utf-8",
+                                                                      errors="replace"))
         return [
-            Segment(s["start"], s["end"], s["text"], s.get("no_speech_prob", 0.0),
-                    s.get("avg_logprob", 0.0))
-            for s in result.get("segments", [])
+            Segment(item["offsets"]["from"] / 1000, item["offsets"]["to"] / 1000, item.get("text", ""))
+            for item in data.get("transcription", [])
         ]
+
+
+# --- faster-whisper (hors Mac) -----------------------------------------------------------
 
 
 class FasterWhisperTranscriber:
@@ -100,42 +174,61 @@ class FasterWhisperTranscriber:
     def __init__(self, model: str | None = None):
         from faster_whisper import WhisperModel
 
-        self._model = WhisperModel(model or DEFAULT_MODELS["faster-whisper"],
-                                   device="auto", compute_type="int8")
+        self._model = WhisperModel(model or FASTER_WHISPER_MODEL, device="auto",
+                                   compute_type="int8")
 
-    def transcribe(self, audio, language: str) -> list[Segment]:
+    def transcribe(self, audio: bytes, language: str) -> list[Segment]:
+        import numpy as np
+
+        samples = np.frombuffer(audio, dtype="<i2").astype(np.float32) / 32768.0
         segments, _ = self._model.transcribe(
-            audio, language=language, vad_filter=True, condition_on_previous_text=False,
+            samples, language=language, vad_filter=True, condition_on_previous_text=False,
         )
         return [Segment(s.start, s.end, s.text, s.no_speech_prob, s.avg_logprob) for s in segments]
 
 
+def backend_name() -> str | None:
+    """Moteur Whisper installé et utilisable sur cette machine, ou None."""
+    if find_whisper_cpp():
+        return "whisper.cpp"
+    if importlib.util.find_spec("faster_whisper"):
+        return "faster-whisper"
+    return None
+
+
 def make_transcriber(model: str | None = None) -> Transcriber:
     backend = backend_name()
-    if backend == "mlx":
-        return MlxTranscriber(model)
+    if backend == "whisper.cpp":
+        return WhisperCppTranscriber(model)
     if backend == "faster-whisper":
         return FasterWhisperTranscriber(model)
     raise WhisperUnavailable(
-        "Whisper n'est pas installé : voir la notice (pipx install --force \".[whisper]\")."
+        "Whisper n'est pas installé : sur Mac, tape « brew install whisper-cpp » (voir la notice)."
     )
 
 
 # --- Découpage du son -------------------------------------------------------------------------
 
 
-def _cut_point(samples, search: int) -> int:
-    """Indice du passage le plus silencieux dans les `search` derniers échantillons."""
-    import numpy as np
+def _samples(data: bytes) -> array:
+    samples = array("h")
+    samples.frombytes(data)
+    if sys.byteorder == "big":
+        samples.byteswap()
+    return samples
 
+
+def _cut_point(samples: array, search: int) -> int:
+    """Indice du passage le plus silencieux dans les `search` derniers échantillons."""
     frame = SAMPLE_RATE // 20  # 50 ms
-    tail = samples[-search:].astype(np.float32)
-    n = len(tail) // frame
-    if n == 0:
-        return len(samples)
-    energy = (tail[: n * frame].reshape(n, frame) ** 2).mean(axis=1)
-    quietest = int(energy.argmin())
-    return len(samples) - search + quietest * frame + frame // 2
+    start = len(samples) - search
+    best, best_energy = len(samples), None
+    for i in range(search // frame):
+        a = start + i * frame
+        energy = sum(x * x for x in samples[a : a + frame : 4])  # 1 sur 4 suffit
+        if best_energy is None or energy < best_energy:
+            best, best_energy = a + frame // 2, energy
+    return best
 
 
 def iter_audio_chunks(
@@ -144,20 +237,18 @@ def iter_audio_chunks(
     cancel: threading.Event | None = None,
     chunk_seconds: float = CHUNK_SECONDS,
     search_seconds: float = SEARCH_SECONDS,
-) -> Iterator[tuple[float, object]]:
-    """Donne (début en secondes, son float32) par morceaux d'environ `chunk_seconds`,
+) -> Iterator[tuple[float, bytes]]:
+    """Donne (début en secondes, son PCM s16le) par morceaux d'environ `chunk_seconds`,
     coupés sur un silence. `on_position(secondes)` suit la lecture du son."""
-    import numpy as np
-
     process = subprocess.Popen(
         [_require("ffmpeg"), "-v", "error", "-nostdin", "-i", url,
          "-vn", "-sn", "-dn", "-ac", "1", "-ar", str(SAMPLE_RATE), "-f", "s16le", "-"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     kill_when_cancelled(process, cancel)
-    chunk = int(chunk_seconds * SAMPLE_RATE)
+    chunk_bytes = int(chunk_seconds * SAMPLE_RATE) * 2
     search = int(search_seconds * SAMPLE_RATE)
-    buffer = np.zeros(0, dtype=np.int16)
+    buffer = bytearray()
     offset = 0  # en échantillons
     read = 0
     try:
@@ -165,24 +256,24 @@ def iter_audio_chunks(
             data = process.stdout.read(65536)
             if not data:
                 break
-            usable = len(data) - len(data) % 2
-            buffer = np.concatenate([buffer, np.frombuffer(data[:usable], dtype=np.int16)])
-            read += usable // 2
+            buffer += data
+            read += len(data)
             if on_position:
-                on_position(read / SAMPLE_RATE)
-            while len(buffer) >= chunk:
-                cut = _cut_point(buffer[:chunk], search)
-                yield offset / SAMPLE_RATE, buffer[:cut].astype(np.float32) / 32768.0
+                on_position(read / 2 / SAMPLE_RATE)
+            while len(buffer) >= chunk_bytes:
+                cut = _cut_point(_samples(bytes(buffer[:chunk_bytes])), search)
+                yield offset / SAMPLE_RATE, bytes(buffer[: cut * 2])
                 offset += cut
-                buffer = buffer[cut:]
+                del buffer[: cut * 2]
         process.wait()
         if cancel is not None and cancel.is_set():
             raise Cancelled()
         if process.returncode != 0:
             message = process.stderr.read().decode("utf-8", "replace").strip()[-300:]
             raise RuntimeError(f"ffmpeg n'a pas pu lire le son : {message}")
-        if len(buffer) > SAMPLE_RATE // 2:
-            yield offset / SAMPLE_RATE, buffer.astype(np.float32) / 32768.0
+        usable = len(buffer) - len(buffer) % 2
+        if usable > SAMPLE_RATE:  # plus d'une demi-seconde
+            yield offset / SAMPLE_RATE, bytes(buffer[:usable])
     finally:
         if process.poll() is None:
             process.kill()
@@ -200,6 +291,8 @@ def _normalize(text: str) -> str:
 def is_hallucination(text: str) -> bool:
     norm = _normalize(text)
     if not re.search(r"\w", norm):  # que de la ponctuation ou des notes de musique
+        return True
+    if re.fullmatch(r"[\[(*].*[\])*]", norm.strip()):  # [BLANK_AUDIO], (musique), *rires*
         return True
     return any(phrase in norm for phrase in _HALLUCINATIONS)
 
@@ -269,12 +362,14 @@ def iter_transcribed_cues(
         if on_status:
             on_status(message, fraction)
 
-    if transcriber.name == "mlx":
-        status("Préparation de Whisper (au premier usage : téléchargement du modèle, ~1,6 Go)…")
+    status("Préparation de Whisper…")
+    if hasattr(transcriber, "prepare"):
+        transcriber.prepare(on_status)  # télécharge le modèle au premier usage
+    status("Transcription de la voix (Whisper) : premier morceau…")
     for offset, audio in iter_audio_chunks(url, cancel=cancel):
         if cancel is not None and cancel.is_set():
             raise Cancelled()
-        chunk_s = len(audio) / SAMPLE_RATE
+        chunk_s = len(audio) / 2 / SAMPLE_RATE
         yield segments_to_cues(transcriber.transcribe(audio, language), offset, chunk_s)
         done = offset + chunk_s
         if duration:

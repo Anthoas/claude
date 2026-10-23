@@ -5,7 +5,6 @@ import subprocess
 import threading
 import time
 
-import numpy as np
 import pytest
 
 from subtrad.cache import TranslationCache
@@ -14,8 +13,8 @@ from subtrad.gui import GuiApp, Settings
 from subtrad.hls import HlsClient
 from subtrad.subtitles import Cue
 from subtrad.transcribe import (
-    SAMPLE_RATE, Segment, _cut_point, is_hallucination, iter_audio_chunks, segments_to_cues,
-    split_for_screen, wrap_lines,
+    SAMPLE_RATE, Segment, WhisperCppTranscriber, _cut_point, _samples, ensure_model,
+    is_hallucination, iter_audio_chunks, segments_to_cues, split_for_screen, wrap_lines,
 )
 from subtrad.translate import TranslationPipeline
 
@@ -214,9 +213,13 @@ def test_invalid_player_setting_is_refused(tmp_path):
 
 
 def test_cut_point_lands_in_the_silence():
-    sound = np.sin(np.arange(SAMPLE_RATE * 30) * 0.05) * 20000
-    sound[SAMPLE_RATE * 25 : SAMPLE_RATE * 26] = 0  # une seconde de silence à 25 s
-    cut = _cut_point(sound.astype(np.int16), SAMPLE_RATE * 8)
+    import math
+    from array import array
+
+    sound = array("h", (int(math.sin(i * 0.05) * 20000) for i in range(SAMPLE_RATE * 30)))
+    for i in range(SAMPLE_RATE * 25, SAMPLE_RATE * 26):  # une seconde de silence à 25 s
+        sound[i] = 0
+    cut = _cut_point(_samples(sound.tobytes()), SAMPLE_RATE * 8)
     assert SAMPLE_RATE * 25 <= cut <= SAMPLE_RATE * 26
 
 
@@ -243,6 +246,7 @@ def test_wrap_and_split_helpers():
         "Une phrase un peu trop\nlongue pour une seule ligne"
     assert split_for_screen(0, 1000, "Bonjour") == [Cue(0, 1000, "Bonjour")]
     assert is_hallucination("Merci d'avoir regardé cette vidéo !")
+    assert is_hallucination("[BLANK_AUDIO]") and is_hallucination("(musique)")
     assert not is_hallucination("Merci beaucoup.")
 
 
@@ -256,7 +260,7 @@ def test_audio_is_read_in_chunks_cut_on_silence(tmp_path):
     chunks = list(iter_audio_chunks(str(wav)))
     offsets = [round(o, 1) for o, _ in chunks]
     assert len(chunks) == 3 and offsets[0] == 0
-    total = sum(len(a) for _, a in chunks) / SAMPLE_RATE
+    total = sum(len(a) for _, a in chunks) / 2 / SAMPLE_RATE
     assert abs(total - 70) < 0.1
     for offset in offsets[1:]:  # coupé pendant un silence (entre 9 et 10 s modulo 10)
         assert 9 <= offset % 10 <= 10
@@ -286,3 +290,68 @@ def test_whisper_fallback_when_there_are_no_subtitles(tmp_path):
     assert job.state == "done", job.error
     srt = FakePlayer.started[-1][1]
     assert srt.count("ID Il dit quelque chose (fr).") == 2  # un par morceau de ~30 s
+
+
+FAKE_WHISPER_CLI = """#!/usr/bin/env python3
+import json, sys, wave
+args = sys.argv[1:]
+opt = lambda name: args[args.index(name) + 1]
+with wave.open(opt("-f")) as w:
+    assert (w.getnchannels(), w.getsampwidth(), w.getframerate()) == (1, 2, 16000)
+    seconds = w.getnframes() / 16000
+assert "-oj" in args and open(opt("-m")).read() == "modèle"
+result = {"transcription": [
+    {"offsets": {"from": 500, "to": 2000}, "text": " Bonjour (" + opt("-l") + ")"},
+    {"offsets": {"from": 2000, "to": 3000}, "text": " [BLANK_AUDIO]"},
+    {"offsets": {"from": 3000, "to": int(seconds * 1000)}, "text": " Fin du morceau."},
+]}
+open(opt("-of") + ".json", "w").write(json.dumps(result))
+"""
+
+
+def test_whisper_cpp_is_called_and_its_json_read(tmp_path, monkeypatch):
+    binary = tmp_path / "whisper-cli"
+    binary.write_text(FAKE_WHISPER_CLI)
+    binary.chmod(0o755)
+    model = tmp_path / "modele.bin"
+    model.write_text("modèle")
+    transcriber = WhisperCppTranscriber(binary=str(binary))
+    transcriber.model_path = model
+    audio = b"\x00\x00" * SAMPLE_RATE * 4  # 4 s de silence
+    segments = transcriber.transcribe(audio, "fr")
+    assert segments[0] == Segment(0.5, 2.0, " Bonjour (fr)") and segments[2].end == 4.0
+    cues = segments_to_cues(segments, offset_s=30.0, chunk_s=4.0)
+    assert [c.text for c in cues] == ["Bonjour (fr)", "Fin du morceau."]  # [BLANK_AUDIO] retiré
+    assert cues[0].start_ms == 30500
+
+
+def test_model_is_downloaded_once_with_progress(tmp_path, monkeypatch):
+    import http.server
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    payload = b"x" * 3_000_000
+    hits = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            hits.append(self.path)
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}/modele.bin"
+    statuses = []
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1")  # pas de proxy pour le serveur local
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
+    path = ensure_model("modele.bin", lambda m, f: statuses.append((m, f)), url=url)
+    again = ensure_model("modele.bin", url=url)
+    server.shutdown()
+    assert path == again and path.read_bytes() == payload and len(hits) == 1
+    assert statuses[-1][1] == 1.0 and "3 Mo" in statuses[-1][0]
+    assert not path.with_name("modele.bin.part").exists()

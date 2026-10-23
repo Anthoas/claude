@@ -68,11 +68,15 @@ requête), `--sme` (préférer les sous-titres pour sourds et malentendants).
 ## Whisper
 
 Sans sous-titres en texte, la voix est transcrite sur la machine (`transcribe.py`) :
-mlx-whisper (`whisper-large-v3-turbo`) sur Mac à puce Apple, faster-whisper (`small`) ailleurs.
-Installation : `pipx install --force ".[whisper]"`. Le son est lu par ffmpeg, découpé en morceaux
-de ~30 s sur les silences, et les « hallucinations » connues de Whisper sont filtrées.
-`subtrad transcrire URL` produit un .srt sans traduire ; `subtrad regarder --transcrire` l'utilise
-en repli.
+- **whisper.cpp** (`brew install whisper-cpp`), utilisé en priorité : binaire déjà compilé
+  (Metal sur Mac Apple), aucune dépendance Python ; le modèle `ggml-large-v3-turbo-q5_0.bin`
+  (~550 Mo) est téléchargé dans `~/.cache/subtrad/whisper/` au premier usage ;
+- **faster-whisper** (`pip install ".[whisper]"`), pour les autres systèmes.
+
+Le son est lu par ffmpeg, découpé en morceaux de ~30 s sur les silences, et les
+« hallucinations » connues de Whisper ([BLANK_AUDIO], « Sous-titres réalisés par… ») sont
+retirées. `subtrad transcrire URL` produit un .srt sans traduire ; `subtrad regarder
+--transcrire` l'utilise en repli.
 
 ## Le direct
 
@@ -127,7 +131,7 @@ répliques ID ──► replay : fichier .srt ──► player.py (mpv ou VLC, -
 | `player.py` | lancement de mpv (pilotage par IPC, surimpression) ou VLC |
 | `pipeline.py` | choix de la source : HLS, MKV indexé, lecture complète, Whisper |
 | `mkv.py` | lecture rapide des sous-titres d'un MKV via son index et des requêtes « Range » |
-| `transcribe.py` | transcription Whisper : découpage du son, moteurs mlx / faster-whisper |
+| `transcribe.py` | transcription Whisper : découpage du son, moteurs whisper.cpp / faster-whisper |
 | `gui.py`, `gui.html` | interface graphique : serveur local (127.0.0.1, jeton de session) et page web |
 
 ## Limites actuelles et prochaines étapes

@@ -475,7 +475,7 @@ function openSettings() {
   $("#whisper").value = s.whisper;
   $("#whisper-hint").textContent = s.whisper_backend
     ? `Whisper est installé (moteur ${s.whisper_backend}). Gratuit, mais plus lent que de vrais sous-titres.`
-    : "Whisper n'est pas installé : voir la notice (étape « Whisper »).";
+    : "Whisper n'est pas installé : dans le Terminal, tape « brew install whisper-cpp » puis relance subtrad gui.";
   $("#depuis").value = s.depuis;
   $("#vers").value = s.vers;
   $("#api-key").value = "";
