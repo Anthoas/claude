@@ -27,6 +27,9 @@
     <string name="prepare">Siapkan (terjemahkan)</string>
     <string name="cancel">Batal</string>
     <string name="back">Kembali</string>
+    <string name="delete">Hapus</string>
+    <string name="delete_confirm">Yakin? Tekan lagi untuk menghapus</string>
+    <string name="delete_help">Terjemahan akan dihapus dari Mac. Untuk menonton lagi, video harus disiapkan ulang.</string>
     <string name="status_ready">Subtitle bahasa Indonesia sudah siap.</string>
     <string name="status_not_ready">Belum diterjemahkan. Mac akan mengambil dan menerjemahkan subtitle (beberapa menit).</string>
     <string name="phase_fetch">Mengambil subtitle di Mac…</string>

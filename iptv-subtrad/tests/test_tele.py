@@ -187,3 +187,17 @@ def test_mac_page_toggles_tv_access_and_shows_the_code(tmp_path):
         app.tv.stop()
         srv.shutdown()
         srv.server_close()
+
+
+def test_tv_can_delete_a_watched_video(tele):
+    base, session, app, _ = tele
+    movie = session.get(base + "/tele/api/search", params={"q": "diner"}).json()["items"][0]["id"]
+    assert wait_job(base, session, session.post(base + "/tele/api/prepare", json={"id": movie}).json()["id"])["state"] == "done"
+    assert session.get(base + "/tele/api/ready").json()["total"] == 1
+
+    assert session.post(base + "/tele/api/forget", json={"id": movie}).json() == {"ready": False}
+    assert session.get(base + "/tele/api/ready").json()["total"] == 0
+    assert session.get(base + "/tele/api/subtitles", params={"id": movie}).status_code == 404
+    assert session.get(base + "/tele/api/video", params={"id": movie}).json()["ready"] is False
+    # Sans le code, impossible de supprimer.
+    assert anonymous().post(base + "/tele/api/forget", json={"id": movie}).status_code == 401

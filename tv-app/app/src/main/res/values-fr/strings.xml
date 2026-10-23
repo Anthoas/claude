@@ -26,6 +26,9 @@
     <string name="prepare">Préparer (traduire)</string>
     <string name="cancel">Annuler</string>
     <string name="back">Retour</string>
+    <string name="delete">Supprimer</string>
+    <string name="delete_confirm">Sûr ? Appuie encore pour supprimer</string>
+    <string name="delete_help">La traduction sera effacée du Mac. Pour revoir la vidéo, il faudra la préparer à nouveau.</string>
     <string name="status_ready">Les sous-titres indonésiens sont prêts.</string>
     <string name="status_not_ready">Pas encore traduit. Le Mac va récupérer et traduire les sous-titres (quelques minutes).</string>
     <string name="phase_fetch">Récupération des sous-titres sur le Mac…</string>

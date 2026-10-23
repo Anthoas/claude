@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -39,6 +40,7 @@ fun DetailScreen(
     id: Int,
     name: String,
     onReady: (Int) -> Unit,
+    onDeleted: (Int) -> Unit,
     onWatch: (VideoDetails, File) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -49,6 +51,7 @@ fun DetailScreen(
     var check by remember { mutableStateOf<CheckResult?>(null) }
     var busy by remember { mutableStateOf<Int?>(null) } // texte de l'action en cours
     var error by remember { mutableStateOf<Throwable?>(null) }
+    var confirmDelete by remember { mutableStateOf(false) } // suppression : il faut appuyer deux fois
     val mainButton = remember { FocusRequester() }
 
     fun action(label: Int, block: suspend () -> Unit) {
@@ -125,7 +128,24 @@ fun DetailScreen(
                         modifier = Modifier.focusRequester(mainButton),
                     ) { Text(stringResource(R.string.watch)) }
                     OutlinedButton(onClick = onBack) { Text(stringResource(R.string.back)) }
+                    OutlinedButton(
+                        onClick = {
+                            if (!confirmDelete) {
+                                confirmDelete = true
+                            } else {
+                                action(R.string.delete) {
+                                    client.forget(id)
+                                    File(context.cacheDir, "subtitles/$id.srt").delete()
+                                    onDeleted(id)
+                                }
+                            }
+                        },
+                        modifier = Modifier.onFocusChanged { if (!it.isFocused) confirmDelete = false },
+                    ) {
+                        Text(stringResource(if (confirmDelete) R.string.delete_confirm else R.string.delete))
+                    }
                 }
+                if (confirmDelete) Text(stringResource(R.string.delete_help), color = Color(0xFF9CA3AF))
             }
             current != null && current.running -> {
                 val translating = current.fetchDone || current.phase >= 2

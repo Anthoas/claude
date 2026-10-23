@@ -18,7 +18,7 @@ la vidéo avec la piste « Indonésien (traduit) » choisie d'office.
 |---|---|
 | Connexion | adresse du Mac (`192.168.1.35:8766`) et code à 6 chiffres |
 | Accueil | onglets Siap ditonton / Film / Serial, recherche, « Muat lebih banyak » |
-| Fiche | Tonton (prêt) ; sinon Siapkan (préparation suivie chaque seconde), Cek subtitle |
+| Fiche | Tonton et Hapus (supprimer, deux appuis) si prêt ; sinon Siapkan (préparation suivie chaque seconde), Cek subtitle |
 | Lecture | ExoPlayer plein écran ; Retour pour quitter |
 
 ## Compiler (étape 3, sur le Mac)

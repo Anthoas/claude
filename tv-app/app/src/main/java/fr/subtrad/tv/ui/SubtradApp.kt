@@ -66,6 +66,7 @@ fun SubtradApp(prefs: Prefs) {
                     DetailScreen(
                         client = c, id = screen.id, name = screen.name,
                         onReady = home::markReady,
+                        onDeleted = { id -> home.markDeleted(id); pop() },
                         onWatch = { video, file -> push(Screen.Player(video, file)) },
                         onBack = { pop() },
                     )

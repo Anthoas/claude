@@ -146,6 +146,8 @@ class _TvHandler(BaseHTTPRequestHandler):
                 return self._json(app.check(int(params["id"])))
             if (method, path) == ("POST", "/tele/api/prepare"):
                 return self._json(app.prepare(int(params["id"])))
+            if (method, path) == ("POST", "/tele/api/forget"):
+                return self._json(app.forget(int(params["id"])))
             if (method, path) == ("POST", "/tele/api/cancel"):
                 return self._json(app.cancel_for_tv(str(params["id"])))
             return self._json({"error": "Introuvable."}, 404)

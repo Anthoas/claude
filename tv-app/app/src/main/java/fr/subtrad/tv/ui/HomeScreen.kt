@@ -95,6 +95,18 @@ class HomeState(private val scope: CoroutineScope) {
         if (i >= 0) items[i] = items[i].copy(ready = true)
     }
 
+    fun markDeleted(id: Int) {
+        val i = items.indexOfFirst { it.id == id }
+        if (i < 0) return
+        if (tab == TAB_READY) {
+            items.removeAt(i)
+            total = (total - 1).coerceAtLeast(0)
+            lastOpened = if (items.isEmpty()) -1 else i.coerceAtMost(items.lastIndex)
+        } else {
+            items[i] = items[i].copy(ready = false)
+        }
+    }
+
     private fun load(append: Boolean = false) {
         val c = client ?: return
         loadJob?.cancel()

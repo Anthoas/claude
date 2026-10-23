@@ -87,6 +87,11 @@ class SubtradClient(address: String, private val code: String) {
 
     suspend fun job(id: String): Job = job(getJson("/tele/api/job?id=${enc(id)}"))
 
+    /** Supprime la traduction gardée sur le Mac (vidéo déjà regardée). */
+    suspend fun forget(id: Int) {
+        postJson("/tele/api/forget", JSONObject().put("id", id))
+    }
+
     suspend fun cancel(id: String): Job = job(postJson("/tele/api/cancel", JSONObject().put("id", id)))
 
     /** Télécharge le .srt traduit dans `target` (le lecteur le lit ensuite depuis la télé). */
