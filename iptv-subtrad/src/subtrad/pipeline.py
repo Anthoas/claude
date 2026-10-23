@@ -99,7 +99,7 @@ def check_subtitles(
 
     try:
         embedded = extract.probe_subtitle_tracks(url, timeout=30)
-    except Exception as exc:
+    except Exception:
         return Compatibility(False, "Flux illisible (ffprobe n'a pas pu l'ouvrir).")
     wanted = [t for t in embedded if lang_matches(t.language, language)]
     text = [t for t in wanted if t.is_text]
