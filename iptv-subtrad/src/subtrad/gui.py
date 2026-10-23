@@ -289,7 +289,7 @@ class GuiApp:
             translator = self.make_translator(self.settings)
             source = open_cue_source(
                 channel.url, self.settings["depuis"], hls=self.hls, on_status=status,
-                cancel=halt,
+                cancel=halt, on_note=lambda message: setattr(job, "note", message),
                 transcriber_factory=self._get_transcriber if self._whisper_enabled() else None,
             )
             cache = self.make_cache()

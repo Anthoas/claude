@@ -237,7 +237,10 @@ def choose_text_track(tracks: list[TextTrack], language: str, prefer_sdh: bool =
     def is_sdh(t: TextTrack) -> bool:
         return bool(re.search(r"sdh|sme|malentendant|hearing", t.name, re.I))
 
-    candidates.sort(key=lambda t: (t.forced, is_sdh(t) != prefer_sdh, not t.default))
+    def is_forced(t: TextTrack) -> bool:
+        return t.forced or bool(re.search(r"forc", t.name, re.I))
+
+    candidates.sort(key=lambda t: (is_forced(t), is_sdh(t) != prefer_sdh, not t.default))
     return candidates[0]
 
 
@@ -400,7 +403,21 @@ def read_mkv_subtitles(
     workers: int = 4,
     reader: RangeReader | None = None,
 ) -> tuple[list[Cue], TextTrack]:
-    """Toutes les répliques de la piste texte `language`, sans lire la vidéo."""
+    """Toutes les répliques de la piste texte `language`, sans lire la vidéo.
+
+    Les morceaux sont lus par `workers` connexions à la fois ; si le serveur refuse ce
+    parallélisme (erreurs 429 / 503, connexions coupées), on recommence avec une seule
+    connexion, plus lente mais acceptée partout.
+    """
+    try:
+        return _read_all(source, language, prefer_sdh, on_progress, cancel, workers, reader)
+    except (requests.HTTPError, requests.ConnectionError, requests.Timeout):
+        if workers <= 1 or (cancel is not None and cancel.is_set()):
+            raise
+        return _read_all(source, language, prefer_sdh, on_progress, cancel, 1, reader)
+
+
+def _read_all(source, language, prefer_sdh, on_progress, cancel, workers, reader):
     mkv = MkvSubtitleReader(source, reader)
     track, entries = mkv.load_index(language, prefer_sdh)
     # Le premier bloc, lu seul, fixe la longueur des en-têtes de cluster pour les suivants.
@@ -418,8 +435,11 @@ def read_mkv_subtitles(
                 on_progress(done[0] / len(entries))
         return cue
 
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="subtrad-mkv") as pool:
-        rest = list(pool.map(fetch, entries[1:]))
+    if workers <= 1:
+        rest = [fetch(entry) for entry in entries[1:]]
+    else:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="subtrad-mkv") as pool:
+            rest = list(pool.map(fetch, entries[1:]))
     found = [r for r in [first, *rest] if r is not None]
     cues = [cue for cue, _ in found]
     # Durée inconnue (3 s par défaut) : la réplique s'arrête au plus tard à la suivante.

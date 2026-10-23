@@ -32,10 +32,37 @@ class EmbeddedTrack:
     codec: str
     language: str
     title: str
+    forced: bool = False  # seulement les passages en langue étrangère (quelques répliques)
+    default: bool = False
+    sdh: bool = False  # sous-titres pour sourds et malentendants (avec les bruits)
 
     @property
     def is_text(self) -> bool:
         return self.codec in TEXT_CODECS
+
+    @property
+    def looks_forced(self) -> bool:
+        return self.forced or bool(re.search(r"forc", self.title, re.I))
+
+    @property
+    def looks_sdh(self) -> bool:
+        return self.sdh or bool(re.search(r"sdh|sme|malentendant|hearing|\bcc\b", self.title, re.I))
+
+
+def choose_embedded_track(
+    tracks: list[EmbeddedTrack], language: str, prefer_sdh: bool = False
+) -> EmbeddedTrack | None:
+    """Meilleure piste TEXTE dans la langue voulue : jamais une piste « forcée » tant qu'une
+    autre existe (elle ne contient que quelques répliques), puis selon la préférence SME,
+    puis la piste par défaut."""
+    from .hls import lang_matches
+
+    candidates = [t for t in tracks if t.is_text and lang_matches(t.language, language)]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda t: (t.looks_forced, t.looks_sdh != prefer_sdh, not t.default,
+                                   t.index))
+    return candidates[0]
 
 
 def _require(binary: str) -> str:
@@ -56,7 +83,9 @@ def probe(url: str, timeout: float = 60.0) -> ProbeResult:
     """Pistes de sous-titres, durée et format du fichier, en un seul appel à ffprobe."""
     out = subprocess.run(
         [_require("ffprobe"), "-v", "error", "-select_streams", "s",
-         "-show_entries", "stream=codec_name:stream_tags=language,title:format=duration,format_name",
+         "-show_entries", "stream=codec_name:stream_tags=language,title"
+                          ":stream_disposition=forced,default,hearing_impaired"
+                          ":format=duration,format_name",
          "-of", "json", url],
         capture_output=True, text=True, timeout=timeout, check=True,
     ).stdout
@@ -72,6 +101,9 @@ def probe(url: str, timeout: float = 60.0) -> ProbeResult:
             codec=st.get("codec_name", ""),
             language=st.get("tags", {}).get("language", ""),
             title=st.get("tags", {}).get("title", ""),
+            forced=bool(st.get("disposition", {}).get("forced")),
+            default=bool(st.get("disposition", {}).get("default")),
+            sdh=bool(st.get("disposition", {}).get("hearing_impaired")),
         )
         for i, st in enumerate(data.get("streams", []))
     ]

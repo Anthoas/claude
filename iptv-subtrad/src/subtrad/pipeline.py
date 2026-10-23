@@ -63,9 +63,15 @@ def open_cue_source(
     on_status: StatusCallback | None = None,
     cancel: threading.Event | None = None,
     transcriber_factory: TranscriberFactory | None = None,
+    on_note: Callable[[str], None] | None = None,
 ) -> CueSource:
     hls = hls or HlsClient()
     reasons: list[str] = []
+
+    def note(message: str) -> None:
+        log.info(message)
+        if on_note:
+            on_note(message)
 
     def status(message: str, fraction: float | None = None) -> None:
         if on_status:
@@ -96,14 +102,20 @@ def open_cue_source(
     except Exception as exc:
         raise NoSubtitles(f"Fichier illisible : {friendly_error(exc)}") from None
     wanted = [t for t in info.tracks if lang_matches(t.language, language)]
-    text_track = next((t for t in wanted if t.is_text), None)
+    text_track = extract.choose_embedded_track(info.tracks, language, prefer_sdh)
     if text_track and info.duration is None:
         raise NoSubtitles("Direct avec sous-titres intégrés : pas encore géré.")
     if text_track:
+        if text_track.looks_forced:
+            note("Seuls des sous-titres « forcés » existent dans cette langue : ils ne "
+                 "contiennent que quelques répliques (passages en langue étrangère).")
         if "matroska" in info.format_name:
-            source = _try_mkv_index(url, language, prefer_sdh, status, cancel)
+            source = _try_mkv_index(url, language, prefer_sdh, status, cancel, note)
             if source:
                 return source
+        else:
+            note(f"Ce fichier n'est pas un MKV ({info.format_name.split(',')[0]}) : la lecture "
+                 "rapide est impossible, il faut lire tout le fichier.")
         return CueSource(
             f"sous-titres intégrés ({text_track.codec}), lecture complète du fichier", "ffmpeg",
             _ffmpeg_groups(url, text_track, info.duration, status, cancel),
@@ -131,7 +143,7 @@ def open_cue_source(
     )
 
 
-def _try_mkv_index(url, language, prefer_sdh, status, cancel) -> CueSource | None:
+def _try_mkv_index(url, language, prefer_sdh, status, cancel, note) -> CueSource | None:
     status("Lecture rapide des sous-titres grâce à l'index du fichier…")
     try:
         cues, track = mkv.read_mkv_subtitles(
@@ -139,13 +151,13 @@ def _try_mkv_index(url, language, prefer_sdh, status, cancel) -> CueSource | Non
             on_progress=lambda f: status(f"Lecture rapide des sous-titres : {f:.0%}", f),
         )
     except mkv.MkvFastPathUnavailable as exc:
-        log.info("Lecture rapide impossible (%s) : lecture complète.", exc)
-        status(f"Lecture rapide impossible ({exc}) : il faut lire tout le fichier…")
+        note(f"Lecture rapide impossible ({exc}) : il faut lire tout le fichier, c'est plus long.")
         return None
     except Exception as exc:  # réseau capricieux : la lecture complète reste possible
         if cancel is not None and cancel.is_set():
             raise
-        log.info("Lecture rapide interrompue (%s) : lecture complète.", friendly_error(exc))
+        note(f"Lecture rapide interrompue ({friendly_error(exc)}) : il faut lire tout le "
+             "fichier, c'est plus long.")
         return None
     return CueSource(f"sous-titres intégrés ({track.codec}), lecture rapide", "mkv-index", [cues])
 
@@ -230,9 +242,14 @@ def check_subtitles(
     except Exception:
         return Compatibility(False, "Flux illisible (ffprobe n'a pas pu l'ouvrir).")
     wanted = [t for t in info.tracks if lang_matches(t.language, language)]
-    text = [t for t in wanted if t.is_text]
+    chosen = extract.choose_embedded_track(info.tracks, language)
+    text = [chosen] if chosen else []
     if text and info.duration is None:
         return Compatibility(False, "Direct avec sous-titres intégrés : pas encore géré.")
+    if text and chosen.looks_forced:
+        return Compatibility(
+            False, "Seuls des sous-titres « forcés » existent en " + language + " : quelques "
+                   "répliques seulement (passages en langue étrangère).")
     if text:
         codec = text[0].codec
         if "matroska" in info.format_name:
