@@ -151,7 +151,7 @@ fun DetailScreen(
                     onClick = {
                         when {
                             video.ready -> watchIndonesian()
-                            running -> Unit // la préparation continue ; « Retour » pour faire autre chose
+                            running -> action(R.string.cancel) { job = client.cancel(current!!.id) }
                             else -> prepareTranslation()
                         }
                     },
@@ -160,7 +160,7 @@ fun DetailScreen(
                     Text(when {
                         video.ready && startMs > 0 -> stringResource(R.string.watch_id_resume, minutesText(startMs))
                         video.ready -> stringResource(R.string.watch_id)
-                        running -> stringResource(R.string.preparing_button, current!!.percent)
+                        running -> stringResource(R.string.cancel)
                         busy == R.string.prepare_translation -> stringResource(R.string.checking_subtitles)
                         else -> stringResource(R.string.prepare_translation)
                     })
@@ -192,10 +192,14 @@ fun DetailScreen(
             when {
                 confirmDelete -> Text(stringResource(R.string.delete_help), color = gray)
                 running -> {
+                    // « Préparation… 45 % · Traduction… » et la barre d'avancement, sous les boutons.
                     val translating = current!!.fetchDone || current.phase >= 2
-                    Text(stringResource(if (translating) R.string.phase_translate else R.string.phase_fetch), color = gray)
+                    Text(stringResource(R.string.preparing_button, current.percent) + " · " +
+                         stringResource(if (translating) R.string.phase_translate else R.string.phase_fetch))
+                    ProgressBar(current.percent / 100.0, Modifier.fillMaxWidth(0.6f))
                     if (current.note.isNotBlank()) Text(current.note, color = Color(0xFFFCD34D))
                 }
+                current?.state == "cancelled" -> Text(stringResource(R.string.cancelled), color = gray)
                 current?.state == "error" -> Text(stringResource(R.string.error_prefix, current.error), color = red)
                 check?.ok == false -> Text(check!!.message, color = red)
                 video.watched -> Text(stringResource(R.string.badge_watched), color = gray)
