@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import extract
+from .errors import friendly_error
 from .hls import HlsClient, LiveStreamDetected, SubtitleTrack, choose_track, lang_matches
 from .subtitles import Cue
 
@@ -39,7 +40,7 @@ def fetch_source_subtitles(
     try:
         tracks = hls.list_subtitle_tracks(url)
     except Exception as exc:  # flux non HLS, serveur qui refuse le GET...
-        tracks, errors = [], [f"HLS : {exc}"]
+        tracks, errors = [], [f"HLS : {friendly_error(exc)}"]
     track = choose_track(tracks, language, prefer_sdh)
     if track:
         origin = f"HLS {track.language} « {track.name} »"
@@ -54,7 +55,7 @@ def fetch_source_subtitles(
     try:
         embedded = extract.probe_subtitle_tracks(url)
     except Exception as exc:
-        embedded, errors = [], errors + [f"ffprobe : {exc}"]
+        embedded, errors = [], errors + [f"ffprobe : {friendly_error(exc)}"]
     for etrack in embedded:
         if etrack.is_text and lang_matches(etrack.language, language):
             if extract.stream_duration(url) is None:
@@ -88,7 +89,7 @@ def check_subtitles(
     try:
         tracks = hls.list_subtitle_tracks(url)
     except Exception as exc:
-        return Compatibility(False, f"Flux inaccessible : {exc}")
+        return Compatibility(False, f"Flux inaccessible : {friendly_error(exc)}")
     track = choose_track(tracks, language)
     if track:
         return Compatibility(True, f"Sous-titres « {track.language} » trouvés ({track.name}).")
@@ -99,7 +100,7 @@ def check_subtitles(
     try:
         embedded = extract.probe_subtitle_tracks(url, timeout=30)
     except Exception as exc:
-        return Compatibility(False, f"Flux illisible par ffprobe ({type(exc).__name__}).")
+        return Compatibility(False, "Flux illisible (ffprobe n'a pas pu l'ouvrir).")
     wanted = [t for t in embedded if lang_matches(t.language, language)]
     text = [t for t in wanted if t.is_text]
     if text:

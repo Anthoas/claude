@@ -27,6 +27,7 @@ from urllib.parse import parse_qs, urlparse
 import anthropic
 
 from .cache import TranslationCache, default_cache_path
+from .errors import friendly_error
 from .hls import HlsClient
 from .live import run_live
 from .pipeline import check_subtitles, fetch_source_subtitles
@@ -247,7 +248,7 @@ class GuiApp:
                 self.make_player().start(channel.url, sub_path, title=channel.name).wait()
             job.state, job.step = "done", "Terminé."
         except Exception as exc:
-            job.state, job.error = "error", str(exc)
+            job.state, job.error = "error", friendly_error(exc)
         finally:
             if translator is not None:
                 job.usage = translator.usage_summary()
@@ -330,7 +331,7 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._json(asdict(app.watch(int(params["id"]))))
             return self._json({"error": "Introuvable."}, 404)
         except Exception as exc:
-            return self._json({"error": str(exc)}, 400)
+            return self._json({"error": friendly_error(exc)}, 400)
 
 
 def make_server(app: GuiApp, port: int = 8765) -> tuple[ThreadingHTTPServer, str]:

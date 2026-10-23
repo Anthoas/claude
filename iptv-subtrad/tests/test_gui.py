@@ -174,3 +174,36 @@ def test_check_reports_missing_language(monkeypatch):
     hls = HlsClient(FakeSession(PAGES))
     result = check_subtitles(f"{BASE}movie/master.m3u8", "de", hls)
     assert result.ok is False and "fr" in result.message and "en" in result.message
+
+
+def test_errors_never_leak_stream_urls(server):
+    base, session, _, _ = server
+    session.post(base + "/api/playlist", json={"text": PLAYLIST})
+    secret_url = "http://iptv.example/series/MONUSER/MONMDP/1.mp4"
+
+    import requests as rq
+    from subtrad.errors import friendly_error
+
+    response = rq.Response()
+    response.status_code = 503
+    error = rq.HTTPError(f"503 Server Error: Service Unavailable for url: {secret_url}", response=response)
+    message = friendly_error(error)
+    assert "MONMDP" not in message and "503" in message and "indisponible" in message
+    assert "MONMDP" not in friendly_error(rq.ConnectionError(f"HTTPConnectionPool: {secret_url}"))
+    assert "MONMDP" not in friendly_error(RuntimeError(f"échec sur {secret_url} (voir)"))
+    assert friendly_error(rq.Timeout()) == "Le serveur du flux n'a pas répondu à temps."
+
+
+def test_check_hides_the_url_when_the_server_fails(tmp_path):
+    import requests as rq
+
+    secret_url = "http://iptv.example/series/MONUSER/MONMDP/1.mp4"
+
+    class Failing:
+        def get(self, url, timeout=None, stream=False):
+            response = rq.Response()
+            response.status_code = 503
+            raise rq.HTTPError(f"503 Server Error for url: {url}", response=response)
+
+    result = check_subtitles(secret_url, "fr", HlsClient(Failing()))
+    assert result.ok is False and "MONMDP" not in result.message and "503" in result.message

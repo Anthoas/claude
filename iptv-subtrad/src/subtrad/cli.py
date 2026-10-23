@@ -11,6 +11,7 @@ from pathlib import Path
 from . import extract
 from .cache import TranslationCache
 from .demo import demo_cues, demo_video_url
+from .errors import friendly_error
 from .hls import HlsClient
 from .pipeline import fetch_source_subtitles
 from .playlist import load_playlist
@@ -231,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         return 130
     except Exception as exc:
-        print(f"Erreur : {exc}", file=sys.stderr)
+        print(f"Erreur : {friendly_error(exc)}", file=sys.stderr)
         return 1
 
 
