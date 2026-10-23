@@ -11,7 +11,8 @@ import anthropic
 from .cache import TranslationCache
 from .subtitles import Cue
 
-DEFAULT_MODEL = "claude-sonnet-5-5"
+# Haiku suffit pour les sous-titres (jugé suffisant à l'essai) et coûte ~20x moins que Sonnet.
+DEFAULT_MODEL = "claude-haiku-5-5"
 
 log = logging.getLogger(__name__)
 

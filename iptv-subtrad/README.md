@@ -41,11 +41,11 @@ subtrad traduire episode.fr.srt -o episode.id.srt
 
 # Tester sans flux : scène de 2 minutes en français, traduction affichée puis lue dans mpv
 subtrad demo
-subtrad demo --modele claude-haiku-5-5   # modèle ~20x moins cher, pour comparer
+subtrad demo --modele claude-sonnet-5-5   # modèle plus puissant (~20x plus cher), pour comparer
 ```
 
 Options utiles : `--depuis fr --vers id` (langues), `--modele` (modèle Claude, défaut
-`claude-sonnet-5-5`), `--effort low|medium|high` (défaut `low`, plus rapide et moins cher : la
+`claude-haiku-5-5`, ~5 centimes pour un film ; `claude-sonnet-5-5` coûte ~20x plus), `--effort low|medium|high` (défaut `low`, plus rapide et moins cher : la
 traduction de sous-titres n'a pas besoin d'une longue réflexion), `--lot 40` (répliques par
 requête), `--sme` (préférer les sous-titres pour sourds et malentendants).
 

@@ -110,8 +110,8 @@ phrase avec sa traduction, puis ouvre mpv sur un écran uni avec les sous-titres
 C'est le meilleur moyen de juger la qualité de l'indonésien et la synchronisation.
 
 - `subtrad demo --sans-lecture` affiche seulement le tableau original / traduction.
-- `subtrad demo --modele claude-haiku-5-5` essaie un modèle beaucoup moins cher (voir
-  « Coût » plus bas) pour comparer la qualité.
+- `subtrad demo --modele claude-sonnet-5-5` essaie un modèle plus puissant, mais environ 20 fois
+  plus cher (voir « Coût » plus bas), pour comparer la qualité.
 
 ## Étape 6 : utiliser le programme
 
@@ -162,9 +162,10 @@ Le résultat est écrit à côté, dans un fichier `mon_fichier.id.srt`.
 `coût estimé : 0,031 $, 22 requêtes, 40 000 tokens envoyés et 30 000 reçus`.
 C'est une estimation, à comparer avec console.anthropic.com.
 
-Le modèle par défaut est `claude-sonnet-5-5`. Pour payer environ 20 fois moins, ajoute
-`--modele claude-haiku-5-5` à la commande : teste d'abord avec `subtrad demo` et fais juger le
-résultat par une personne qui parle indonésien.
+Le modèle par défaut est `claude-haiku-5-5` : environ 5 centimes pour un film (estimation).
+Si une traduction te semble trop approximative, ajoute `--modele claude-sonnet-5-5` à la
+commande : meilleur sur les passages difficiles, mais environ 20 fois plus cher (de l'ordre
+d'un dollar par film).
 
 ## Mettre à jour le programme
 

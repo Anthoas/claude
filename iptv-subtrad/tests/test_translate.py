@@ -72,7 +72,7 @@ def test_claude_translator_request_and_parsing():
         "Terima kasih.",
     ]
     request = calls[0]
-    assert request["model"] == "claude-sonnet-5-5"
+    assert request["model"] == "claude-haiku-5-5"
     assert request["output_config"]["format"]["type"] == "json_schema"
     assert "Indonesian" in request["system"]
     payload = json.loads(request["messages"][0]["content"])
