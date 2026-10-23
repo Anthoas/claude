@@ -6,13 +6,14 @@ Sert de solution de repli quand le flux n'est pas un HLS avec pistes WebVTT sép
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
-import tempfile
+import threading
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
+from .errors import Cancelled
 from .subtitles import Cue, parse_subtitles
 
 # Codecs texte : convertibles directement en SRT.
@@ -42,6 +43,39 @@ def _require(binary: str) -> str:
     if not path:
         raise FfmpegMissing(f"{binary} introuvable : installe ffmpeg (https://ffmpeg.org)")
     return path
+
+
+@dataclass
+class ProbeResult:
+    tracks: list[EmbeddedTrack]
+    duration: float | None  # None : direct (durée inconnue)
+    format_name: str  # ex. « matroska,webm », « mov,mp4,m4a,3gp,3g2,mj2 », « mpegts »
+
+
+def probe(url: str, timeout: float = 60.0) -> ProbeResult:
+    """Pistes de sous-titres, durée et format du fichier, en un seul appel à ffprobe."""
+    out = subprocess.run(
+        [_require("ffprobe"), "-v", "error", "-select_streams", "s",
+         "-show_entries", "stream=codec_name:stream_tags=language,title:format=duration,format_name",
+         "-of", "json", url],
+        capture_output=True, text=True, timeout=timeout, check=True,
+    ).stdout
+    data = json.loads(out or "{}")
+    fmt = data.get("format", {})
+    try:
+        duration = float(fmt.get("duration"))
+    except (TypeError, ValueError):
+        duration = None
+    tracks = [
+        EmbeddedTrack(
+            index=i,
+            codec=st.get("codec_name", ""),
+            language=st.get("tags", {}).get("language", ""),
+            title=st.get("tags", {}).get("title", ""),
+        )
+        for i, st in enumerate(data.get("streams", []))
+    ]
+    return ProbeResult(tracks, duration, fmt.get("format_name", ""))
 
 
 def probe_subtitle_tracks(url: str, timeout: float = 60.0) -> list[EmbeddedTrack]:
@@ -87,44 +121,95 @@ def parse_progress_line(line: str) -> float | None:
         return None
 
 
-def extract_text_track(
+_PROGRESS_KEY_RE = re.compile(r"^[a-z_]+=")
+
+
+def kill_when_cancelled(process: subprocess.Popen, cancel: threading.Event | None) -> None:
+    """Tue `process` dès que `cancel` est déclenché (même s'il attend le réseau)."""
+    if cancel is None:
+        return
+
+    def watch() -> None:
+        while process.poll() is None:
+            if cancel.wait(0.3):
+                process.kill()
+                return
+
+    threading.Thread(target=watch, daemon=True).start()
+
+
+def iter_text_track(
     url: str,
     track: EmbeddedTrack,
     duration: float | None = None,
     on_progress: Callable[[float], None] | None = None,
-) -> list[Cue]:
-    """Extrait une piste texte. Sur un flux réseau, ffmpeg doit lire tout le fichier.
+    cancel: threading.Event | None = None,
+) -> Iterator[Cue]:
+    """Donne les répliques d'une piste texte au fur et à mesure que ffmpeg les lit.
 
-    `on_progress(fraction)` est appelé pendant la lecture (0 à 1) quand `duration`, la
-    durée du fichier en secondes, est connue.
+    Sur un fichier réseau, ffmpeg doit lire tout le fichier ; on n'attend pas la fin pour
+    commencer à traduire. `on_progress(fraction)` suit la lecture quand `duration` est connue.
     """
     if not track.is_text:
         raise ValueError(
             f"La piste {track.index} ({track.codec}) est une image : il faudrait de l'OCR."
         )
-    with tempfile.TemporaryDirectory(prefix="subtrad-") as tmp:
-        out_path = Path(tmp) / "sous-titres.srt"
-        with open(Path(tmp) / "ffmpeg.log", "w+", encoding="utf-8") as log:
-            process = subprocess.Popen(
-                [_require("ffmpeg"), "-v", "error", "-nostdin", "-y",
-                 "-progress", "pipe:1", "-nostats", "-stats_period", "0.5",
-                 "-i", url, "-map", f"0:s:{track.index}", "-f", "srt", str(out_path)],
-                stdout=subprocess.PIPE, stderr=log, text=True,
+    process = subprocess.Popen(
+        [_require("ffmpeg"), "-v", "error", "-nostdin",
+         "-progress", "pipe:2", "-nostats", "-stats_period", "0.5",
+         "-i", url, "-map", f"0:s:{track.index}",
+         # Écrire chaque réplique dès qu'elle est lue (sinon ffmpeg les garde en mémoire tampon).
+         "-flush_packets", "1", "-f", "srt", "-"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding="utf-8", errors="replace",
+    )
+    errors: list[str] = []
+
+    def read_stderr() -> None:
+        for line in process.stderr:
+            position = parse_progress_line(line)
+            if position is not None:
+                if duration and on_progress:
+                    on_progress(max(0.0, min(1.0, position / duration)))
+            elif line.strip() and not _PROGRESS_KEY_RE.match(line):
+                errors.append(line.strip())
+
+    stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+    stderr_thread.start()
+    kill_when_cancelled(process, cancel)
+    try:
+        block: list[str] = []
+        for line in process.stdout:
+            if line.strip():
+                block.append(line.rstrip("\n"))
+                continue
+            if block:
+                yield from parse_subtitles("\n".join(block) + "\n", "srt")
+                block = []
+        if block:
+            yield from parse_subtitles("\n".join(block) + "\n", "srt")
+        process.wait()
+        stderr_thread.join(timeout=2)
+        if cancel is not None and cancel.is_set():
+            raise Cancelled()
+        if process.returncode != 0:
+            raise RuntimeError(
+                "ffmpeg n'a pas pu lire les sous-titres : " + " ".join(errors)[-300:]
             )
-            try:
-                for line in process.stdout:
-                    position = parse_progress_line(line)
-                    if position is not None and duration and on_progress:
-                        on_progress(max(0.0, min(1.0, position / duration)))
-                process.wait()
-            except BaseException:
-                process.kill()
-                raise
-            if process.returncode != 0:
-                log.seek(0)
-                raise RuntimeError(
-                    f"ffmpeg n'a pas pu lire les sous-titres : {log.read().strip()[-300:]}"
-                )
         if on_progress:
             on_progress(1.0)
-        return parse_subtitles(out_path.read_text(encoding="utf-8", errors="replace"), "srt")
+    finally:
+        if process.poll() is None:  # consommateur arrêté en route (annulation, erreur)
+            process.kill()
+            process.wait()
+
+
+def extract_text_track(
+    url: str,
+    track: EmbeddedTrack,
+    duration: float | None = None,
+    on_progress: Callable[[float], None] | None = None,
+    cancel: threading.Event | None = None,
+) -> list[Cue]:
+    """Extrait toute une piste texte (voir `iter_text_track`)."""
+    return list(iter_text_track(url, track, duration, on_progress, cancel))

@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
+from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Callable, Protocol
 
 import anthropic
 
 from .cache import TranslationCache
+from .errors import Cancelled
 from .subtitles import Cue
 
 # Haiku suffit pour les sous-titres (jugé suffisant à l'essai) et coûte ~20x moins que Sonnet.
@@ -74,8 +78,11 @@ class Translator(Protocol):
 
     namespace: str  # identifie le moteur et les langues dans le cache
 
-    def translate_batch(self, texts: list[str], context: list[tuple[str, str]]) -> list[str]:
-        """Traduit `texts` ; `context` = répliques précédentes (original, traduction)."""
+    def translate_batch(
+        self, texts: list[str], context: list[tuple[str, str | None]]
+    ) -> list[str]:
+        """Traduit `texts` ; `context` = répliques précédentes (original, traduction ou None
+        quand elle n'est pas encore connue, en traduction parallèle)."""
         ...
 
 
@@ -92,14 +99,20 @@ class ClaudeTranslator:
         self.client = client or anthropic.Anthropic()
         self.namespace = f"claude:{model}:{source}>{target}"
         self.calls = self.input_tokens = self.output_tokens = 0
+        self._usage_lock = threading.Lock()
         self.system = SYSTEM_PROMPT.format(
             source=LANGUAGE_NAMES.get(source, source),
             target=LANGUAGE_NAMES.get(target, target),
         )
 
-    def translate_batch(self, texts: list[str], context: list[tuple[str, str]]) -> list[str]:
+    def translate_batch(
+        self, texts: list[str], context: list[tuple[str, str | None]]
+    ) -> list[str]:
         payload = {
-            "previous_cues": [{"original": o, "translation": t} for o, t in context],
+            "previous_cues": [
+                {"original": o, **({"translation": t} if t is not None else {})}
+                for o, t in context
+            ],
             "cues": [{"id": i, "text": text} for i, text in enumerate(texts)],
         }
         response = self.client.beta.messages.create(
@@ -119,9 +132,10 @@ class ClaudeTranslator:
 
         usage = getattr(response, "usage", None)
         if usage:
-            self.calls += 1
-            self.input_tokens += usage.input_tokens or 0
-            self.output_tokens += usage.output_tokens or 0
+            with self._usage_lock:  # plusieurs lots peuvent être traduits en même temps
+                self.calls += 1
+                self.input_tokens += usage.input_tokens or 0
+                self.output_tokens += usage.output_tokens or 0
 
         if response.stop_reason in ("refusal", "max_tokens"):
             if len(texts) == 1:
@@ -176,7 +190,7 @@ def translate_cues(
     batch_size: int = 40,
     context_size: int = 5,
     on_progress: Callable[[int, int], None] | None = None,
-    history: list[tuple[str, str]] | None = None,
+    history: list[tuple[str, str | None]] | None = None,
 ) -> list[Cue]:
     """Traduit toutes les répliques, par lots, en réutilisant le cache.
 
@@ -213,3 +227,88 @@ def translate_cues(
             on_progress(min(start + batch_size, len(todo)), len(todo))
 
     return [cue.with_text(done[cue.text]) for cue in cues]
+
+
+class TranslationPipeline:
+    """Traduit des répliques au fil de leur arrivée, en envoyant plusieurs lots à la fois.
+
+    On lui passe les répliques pendant qu'elles sont extraites du fichier : la traduction
+    avance en même temps que la lecture au lieu d'attendre la fin, et plusieurs requêtes
+    partent en parallèle. Chaque lot reçoit comme contexte les répliques d'origine qui le
+    précèdent (leur traduction n'est pas forcément déjà connue).
+    """
+
+    def __init__(
+        self,
+        translator: Translator,
+        cache: TranslationCache | None = None,
+        batch_size: int = 40,
+        workers: int = 4,
+        context_size: int = 5,
+        first_batch_size: int | None = None,
+        on_batch: Callable[[list[Cue]], None] | None = None,
+        cancel: threading.Event | None = None,
+        keep_original_on_error: bool = False,
+    ):
+        self.translator, self.cache = translator, cache
+        self.batch_size, self.context_size = batch_size, context_size
+        self.on_batch, self.cancel = on_batch, cancel
+        self.keep_original_on_error = keep_original_on_error
+        # Un premier lot plus petit : les premières répliques sont prêtes plus vite.
+        self._next_size = first_batch_size or batch_size
+        self._buffer: list[Cue] = []
+        self._recent: deque[str] = deque(maxlen=context_size)
+        self._executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="subtrad-tr")
+        self._futures: list[Future] = []
+        self._lock = threading.Lock()
+        self._results: list[Cue] = []
+        self.found = 0
+        self.translated = 0
+
+    def add(self, cues: list[Cue]) -> None:
+        for cue in cues:
+            self._buffer.append(cue)
+            self.found += 1
+            if len(self._buffer) >= self._next_size:
+                self.flush()
+
+    def flush(self) -> None:
+        """Envoie tout de suite les répliques en attente, même si le lot est incomplet."""
+        if not self._buffer:
+            return
+        batch, self._buffer = self._buffer, []
+        self._next_size = self.batch_size
+        context = [(text, None) for text in self._recent]
+        self._recent.extend(cue.text for cue in batch)
+        self._futures.append(self._executor.submit(self._translate, batch, context))
+
+    def _translate(self, batch: list[Cue], context: list[tuple[str, None]]) -> None:
+        if self.cancel is not None and self.cancel.is_set():
+            raise Cancelled()
+        try:
+            out = translate_cues(batch, self.translator, self.cache, len(batch),
+                                 self.context_size, history=context)
+        except Exception as exc:
+            if not self.keep_original_on_error:
+                raise
+            log.warning("Traduction impossible (%s) : sous-titres d'origine gardés.", exc)
+            out = list(batch)
+        with self._lock:
+            self._results.extend(out)
+            self.translated += len(out)
+        if self.on_batch:
+            self.on_batch(out)
+
+    def finish(self) -> list[Cue]:
+        """Attend la fin de toutes les traductions et les renvoie dans l'ordre du film."""
+        self.flush()
+        try:
+            for future in self._futures:
+                future.result()  # relaie la première erreur
+        finally:
+            self.close()
+        with self._lock:
+            return sorted(self._results, key=lambda c: (c.start_ms, c.end_ms))
+
+    def close(self) -> None:
+        self._executor.shutdown(wait=False, cancel_futures=True)

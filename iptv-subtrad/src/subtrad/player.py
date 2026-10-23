@@ -108,6 +108,7 @@ class MpvPlayer:
         subtitle: str | Path | None = None,
         title: str | None = None,
         live_segments_behind: int | None = None,
+        hide_original_subs: bool = False,
     ):
         """Lance mpv. `live_segments_behind` active le mode direct : la lecture démarre
         ce nombre de segments derrière le direct, pour laisser à la traduction le temps
@@ -128,10 +129,16 @@ class MpvPlayer:
                 # Pas de sous-titres d'origine par-dessus la traduction.
                 "--sid=no",
             ]
+        elif hide_original_subs:
+            args.append("--sid=no")  # nos sous-titres sont dessinés par-dessus (display_loop)
         if title:
             args.append(f"--force-media-title={title}")
         self.process = subprocess.Popen(args + [url])
         return self
+
+    def stop(self) -> None:
+        if self.is_running():
+            self.process.terminate()
 
     @property
     def ipc(self) -> MpvIpc:
@@ -167,13 +174,19 @@ class MpvPlayer:
 
 
 class VlcPlayer:
-    """VLC ne sait pas recharger un fichier de sous-titres à chaud : adapté au replay/VOD."""
+    """VLC ne sait pas recharger un fichier de sous-titres à chaud : il reçoit les sous-titres
+    traduits au lancement, une fois la traduction terminée (replay / VOD)."""
 
     def __init__(self, binary: str | None = None):
         self.binary = binary or find_player("vlc")
         self.process: subprocess.Popen | None = None
 
-    def start(self, url: str, subtitle: str | Path | None = None, title: str | None = None):
+    def stop(self) -> None:
+        if self.process is not None and self.process.poll() is None:
+            self.process.terminate()
+
+    def start(self, url: str, subtitle: str | Path | None = None, title: str | None = None,
+              **_ignored):
         args = [self.binary]
         if subtitle:
             args.append(f"--sub-file={subtitle}")

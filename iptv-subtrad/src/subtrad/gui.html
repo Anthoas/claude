@@ -62,7 +62,7 @@
   .badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px;
            border: 1px solid var(--line); margin-right: 6px; color: var(--text); }
   .status { font-size: 13px; margin-top: 3px; }
-  .status.ok { color: var(--ok); } .status.ko { color: var(--ko); }
+  .status.ok { color: var(--ok); } .status.ko { color: var(--ko); } .status.warn { color: var(--warn); }
   .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   #more { display: block; margin: 14px auto 0; }
 
@@ -71,6 +71,10 @@
   .job { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent);
          border-radius: var(--radius); padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
   .job.done { border-left-color: var(--ok); } .job.error { border-left-color: var(--ko); }
+  .job.cancelled { border-left-color: var(--muted); }
+  .job .row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .job .cancel { margin-top: 8px; padding: 4px 10px; font-size: 13px; }
+  .job .note { font-size: 13px; color: var(--warn); margin-top: 4px; }
   .job .title { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
   .job .close { border: 0; background: none; padding: 0 4px; color: var(--muted); }
   .bar { height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; margin: 6px 0; }
@@ -157,6 +161,16 @@
   <select id="vers">
     <option value="id">Indonésien</option><option value="en">Anglais</option><option value="fr">Français</option>
   </select>
+  <label for="lecteur">Lecteur vidéo</label>
+  <select id="lecteur"></select>
+  <div class="hint">VLC attend que toute la traduction soit prête ; mpv démarre au bout de
+    quelques secondes et reçoit la suite des sous-titres pendant la lecture.</div>
+  <label for="whisper">Si une vidéo n'a pas de sous-titres</label>
+  <select id="whisper">
+    <option value="on">Transcrire la voix (Whisper, sur ce Mac)</option>
+    <option value="off">Ne rien faire</option>
+  </select>
+  <div id="whisper-hint" class="hint"></div>
   <label>Playlist</label>
   <button id="change-playlist" type="button">Changer de playlist…</button>
   <div class="buttons">
@@ -341,8 +355,10 @@ async function checkItem(item, button, status) {
   const timer = setInterval(tick, 1000);
   try {
     const r = await api("/api/check", { id: item.id });
-    status.className = `status ${r.ok ? "ok" : "ko"}`;
-    status.textContent = `${r.ok ? "✓" : "✗"} ${r.message}`;
+    const look = { fast: ["ok", "✓"], slow: ["warn", "✓"], whisper: ["warn", "◐"], no: ["ko", "✗"] }[r.mode]
+      || (r.ok ? ["ok", "✓"] : ["ko", "✗"]);
+    status.className = `status ${look[0]}`;
+    status.textContent = `${look[1]} ${r.message}`;
   } catch (e) {
     status.className = "status ko";
     status.textContent = e.message;
@@ -393,11 +409,17 @@ async function pollJobs() {
   pollTimer = setTimeout(pollJobs, active ? 1000 : 5000);
 }
 
-const PHASES = ["Recherche des sous-titres", "Traduction", "Lecture"];
+const PHASES = ["Récupération des sous-titres", "Traduction", "Lecture"];
 
 function elapsedText(startedAt) {
   const sec = Math.max(0, Math.floor(Date.now() / 1000 - startedAt));
   return sec < 60 ? `${sec} s` : `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, "0")} s`;
+}
+
+function bar(fraction) {
+  const node = el("div", { className: "bar" + (fraction == null ? " indeterminate" : "") }, el("div"));
+  if (fraction != null) node.firstChild.style.width = `${Math.round(Math.min(1, fraction) * 100)}%`;
+  return node;
 }
 
 function renderJobs(jobs) {
@@ -406,26 +428,35 @@ function renderJobs(jobs) {
     close.addEventListener("click", () => { hiddenJobs.add(job.id); pollJobs(); });
     const card = el("div", { className: `job ${job.state}` },
       el("div", { className: "title" }, el("span", { textContent: job.title }), close));
-    if (job.state === "running") {
-      card.append(
-        el("div", { className: "phase", textContent:
-          `Étape ${job.phase}/3 · ${PHASES[job.phase - 1]} · depuis ${elapsedText(job.started_at)}` }),
-        el("div", {}, el("span", { className: "spinner" }), job.step));
-      // Avancement de l'étape : mesuré si on le connaît, sinon une barre qui va et vient.
-      let fraction = job.fraction;
-      let detail = fraction != null ? `${Math.round(fraction * 100)} %` : "";
-      if (fraction == null && job.phase === 2 && job.total) {
-        fraction = job.done / job.total;
-        detail = `${fmt(job.done)} / ${fmt(job.total)} répliques`;
+    const active = job.state === "running" || job.state === "playing";
+    if (active) {
+      const where = job.state === "playing" && job.player ? `Lecture dans ${job.player}` : PHASES[job.phase - 1];
+      card.append(el("div", { className: "phase", textContent:
+        `Étape ${job.phase}/3 · ${where} · depuis ${elapsedText(job.started_at)}` }));
+      card.append(el("div", {}, job.state === "running" ? el("span", { className: "spinner" }) : null, job.step));
+      // Récupération des sous-titres (lecture rapide, lecture du fichier ou transcription).
+      if (!job.fetch_done && job.fetch_step) {
+        card.append(el("div", { className: "row" }, el("span", { textContent: job.fetch_step })), bar(job.fraction));
       }
-      const bar = el("div", { className: "bar" + (fraction == null ? " indeterminate" : "") }, el("div"));
-      if (fraction != null) bar.firstChild.style.width = `${Math.round(fraction * 100)}%`;
-      card.append(bar);
-      if (detail) card.append(el("div", { className: "muted", textContent: detail }));
+      // Traduction, qui avance en même temps que la récupération.
+      if (job.found) {
+        const label = job.fetch_done ? `${fmt(job.translated)} / ${fmt(job.found)} répliques traduites`
+                                     : `${fmt(job.translated)} répliques traduites (${fmt(job.found)} trouvées pour l'instant)`;
+        card.append(el("div", { className: "row" }, el("span", { textContent: label })),
+                    bar(job.fetch_done ? job.translated / job.found : null));
+      }
+      const cancel = el("button", { className: "cancel", textContent: job.state === "playing" ? "Arrêter" : "Annuler" });
+      cancel.addEventListener("click", async () => {
+        cancel.disabled = true;
+        try { await api("/api/cancel", { id: job.id }); } catch (e) { alert(e.message); }
+        pollJobs();
+      });
+      card.append(cancel);
     } else {
       card.append(el("div", { className: job.state === "error" ? "error" : "muted",
                               textContent: job.state === "error" ? `Erreur : ${job.error}` : job.step }));
     }
+    if (job.note) card.append(el("div", { className: "note", textContent: job.note }));
     if (job.usage) card.append(el("div", { className: "muted", textContent: job.usage }));
     return card;
   }));
@@ -438,6 +469,13 @@ function openSettings() {
   $("#model").replaceChildren(...Object.entries(s.models).map(([id, label]) =>
     el("option", { value: id, textContent: label })));
   $("#model").value = s.model;
+  $("#lecteur").replaceChildren(...Object.entries(s.players).map(([id, label]) =>
+    el("option", { value: id, textContent: label })));
+  $("#lecteur").value = s.lecteur;
+  $("#whisper").value = s.whisper;
+  $("#whisper-hint").textContent = s.whisper_backend
+    ? `Whisper est installé (moteur ${s.whisper_backend}). Gratuit, mais plus lent que de vrais sous-titres.`
+    : "Whisper n'est pas installé : voir la notice (étape « Whisper »).";
   $("#depuis").value = s.depuis;
   $("#vers").value = s.vers;
   $("#api-key").value = "";
@@ -455,6 +493,7 @@ $("#save-settings").addEventListener("click", async () => {
     state.settings = { ...state.settings, ...await api("/api/settings", {
       api_key: $("#api-key").value.trim(), model: $("#model").value,
       depuis: $("#depuis").value, vers: $("#vers").value,
+      lecteur: $("#lecteur").value, whisper: $("#whisper").value,
     }) };
     $("#settings").close();
   } catch (e) {

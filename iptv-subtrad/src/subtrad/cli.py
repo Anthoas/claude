@@ -16,7 +16,7 @@ from .hls import HlsClient
 from .pipeline import fetch_source_subtitles
 from .playlist import load_playlist
 from .subtitles import load_subtitles, save_subtitles
-from .translate import DEFAULT_MODEL, ClaudeTranslator, translate_cues
+from .translate import DEFAULT_MODEL, ClaudeTranslator, TranslationPipeline
 
 
 def _progress(done: int, total: int) -> None:
@@ -28,6 +28,26 @@ def _progress(done: int, total: int) -> None:
 def _status(message: str, fraction: float | None = None) -> None:
     """Affiche l'étape en cours sur une seule ligne qui se met à jour."""
     print(f"\r\033[K  {message}", end="", file=sys.stderr, flush=True)
+
+
+def _translate_all(cues, translator, batch_size: int):
+    """Traduit toutes les répliques, plusieurs lots en parallèle."""
+    if not cues:
+        return []
+    pipeline = TranslationPipeline(
+        translator, TranslationCache(), batch_size, workers=4,
+        on_batch=lambda _: _progress(pipeline.translated, len(cues)),
+    )
+    pipeline.add(cues)
+    return pipeline.finish()
+
+
+def _whisper_factory(args):
+    if not getattr(args, "transcrire", False):
+        return None
+    from .transcribe import make_transcriber
+
+    return make_transcriber
 
 
 def _translator(args) -> ClaudeTranslator:
@@ -77,9 +97,7 @@ def cmd_traduire(args) -> int:
     cues = load_subtitles(args.entree)
     out = Path(args.sortie or Path(args.entree).with_suffix(f".{args.vers}.srt"))
     translator = _translator(args)
-    translated = translate_cues(
-        cues, translator, TranslationCache(), args.lot, on_progress=_progress
-    )
+    translated = _translate_all(cues, translator, args.lot)
     _print_usage(translator)
     save_subtitles(translated, out)
     print(f"{len(translated)} répliques écrites dans {out}")
@@ -92,9 +110,7 @@ def cmd_demo(args) -> int:
     cues = demo_cues()
     translator = _translator(args)
     print(f"Traduction de la scène de démonstration ({len(cues)} répliques)…", file=sys.stderr)
-    translated = translate_cues(
-        cues, translator, TranslationCache(), args.lot, on_progress=_progress
-    )
+    translated = _translate_all(cues, translator, args.lot)
     _print_usage(translator)
     print()
     for src, dst in zip(cues, translated):
@@ -115,16 +131,15 @@ def cmd_regarder(args) -> int:
     from .player import make_player  # import tardif : inutile pour les autres commandes
 
     print("Recherche des sous-titres…", file=sys.stderr)
-    source = fetch_source_subtitles(args.url, args.depuis, prefer_sdh=args.sme, on_status=_status)
+    source = fetch_source_subtitles(args.url, args.depuis, prefer_sdh=args.sme, on_status=_status,
+                                    transcriber_factory=_whisper_factory(args))
     print("\r\033[K", end="", file=sys.stderr)
     if source.live_track:
         return _regarder_direct(args, source)
     print(f"  {len(source.cues)} répliques ({source.origin})", file=sys.stderr)
 
     translator = _translator(args)
-    translated = translate_cues(
-        source.cues, translator, TranslationCache(), args.lot, on_progress=_progress
-    )
+    translated = _translate_all(source.cues, translator, args.lot)
     _print_usage(translator)
     sub_path = Path(args.sortie) if args.sortie else (
         Path(tempfile.mkdtemp(prefix="subtrad-")) / f"sous-titres.{args.vers}.srt"
@@ -160,6 +175,21 @@ def _regarder_direct(args, source) -> int:
         _print_usage(translator)
 
 
+def cmd_transcrire(args) -> int:
+    from .extract import probe
+    from .transcribe import iter_transcribed_cues, make_transcriber
+
+    transcriber = make_transcriber(args.modele_whisper)
+    groups = iter_transcribed_cues(args.url, transcriber, args.langue, probe(args.url).duration,
+                                   on_status=_status)
+    cues = [cue for group in groups for cue in group]
+    print("\r\033[K", end="", file=sys.stderr)
+    out = Path(args.sortie or f"transcription.{args.langue}.srt")
+    save_subtitles(cues, out)
+    print(f"{len(cues)} répliques écrites dans {out}")
+    return 0
+
+
 def cmd_gui(args) -> int:
     from .gui import run_gui
 
@@ -177,6 +207,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sans-navigateur", action="store_true",
                    help="ne pas ouvrir le navigateur automatiquement")
     p.set_defaults(func=cmd_gui)
+
+    p = sub.add_parser("transcrire", help="transcrire la voix d'une vidéo avec Whisper (sans traduire)")
+    p.add_argument("url", help="URL ou fichier vidéo")
+    p.add_argument("--langue", default="fr", help="langue parlée (défaut : fr)")
+    p.add_argument("--modele-whisper", help="modèle Whisper (défaut : le meilleur pour ce Mac)")
+    p.add_argument("-o", "--sortie", help="fichier .srt à écrire")
+    p.set_defaults(func=cmd_transcrire)
 
     p = sub.add_parser("chaines", help="lister les chaînes d'une playlist M3U")
     p.add_argument("playlist", help="URL ou fichier .m3u")
@@ -217,6 +254,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lecteur-chemin", help="chemin du binaire du lecteur")
     p.add_argument("--sme", action="store_true",
                    help="préférer les sous-titres pour sourds et malentendants")
+    p.add_argument("--transcrire", action="store_true",
+                   help="sans sous-titres en texte, transcrire la voix avec Whisper")
     live = p.add_argument_group("direct (mpv uniquement)")
     live.add_argument("--marge", type=int, default=6,
                       help="segments de retard sur le direct, le temps de traduire (défaut : 6)")

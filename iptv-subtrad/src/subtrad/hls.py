@@ -199,6 +199,8 @@ class HlsClient:
         return body.decode("utf-8", errors="replace").lstrip("\ufeff")
 
     def list_subtitle_tracks(self, url: str) -> list[SubtitleTrack]:
+        if not url.startswith(("http://", "https://")):
+            return []  # fichier local : pas de playlist HLS à lire
         try:
             text = self.get_text(url)
         except NotAPlaylist:

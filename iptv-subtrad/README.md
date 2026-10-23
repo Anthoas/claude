@@ -52,6 +52,28 @@ Options utiles : `--depuis fr --vers id` (langues), `--modele` (modèle Claude, 
 traduction de sous-titres n'a pas besoin d'une longue réflexion), `--lot 40` (répliques par
 requête), `--sme` (préférer les sous-titres pour sourds et malentendants).
 
+## Vitesse
+
+- **Sous-titres intégrés à un MKV** : lecture rapide grâce à l'index du fichier (« Cues ») et
+  à des requêtes HTTP « Range » : seuls les sous-titres sont téléchargés (~1 % du fichier),
+  en quelques secondes au lieu de lire toute la vidéo. Repli automatique sur la lecture
+  complète par ffmpeg si l'index ou le serveur ne le permettent pas (`mkv.py`).
+- **Lecture complète** (MP4, MKV sans index) : les répliques sortent au fil de la lecture
+  (`ffmpeg -flush_packets 1`) et partent aussitôt en traduction.
+- **Traduction** : 4 lots envoyés en parallèle (`TranslationPipeline`), en même temps que la
+  récupération des sous-titres.
+- **Démarrage rapide** (lecteur mpv) : la vidéo démarre dès les premières répliques traduites,
+  la suite est dessinée par-dessus l'image pendant la lecture. VLC, lui, attend la fin.
+
+## Whisper
+
+Sans sous-titres en texte, la voix est transcrite sur la machine (`transcribe.py`) :
+mlx-whisper (`whisper-large-v3-turbo`) sur Mac à puce Apple, faster-whisper (`small`) ailleurs.
+Installation : `pipx install --force ".[whisper]"`. Le son est lu par ffmpeg, découpé en morceaux
+de ~30 s sur les silences, et les « hallucinations » connues de Whisper sont filtrées.
+`subtrad transcrire URL` produit un .srt sans traduire ; `subtrad regarder --transcrire` l'utilise
+en repli.
+
 ## Le direct
 
 La commande `regarder` reconnaît un direct (playlist HLS sans `#EXT-X-ENDLIST`) et passe dans
@@ -103,7 +125,9 @@ répliques ID ──► replay : fichier .srt ──► player.py (mpv ou VLC, -
 | `cache.py` | cache SQLite des traductions |
 | `live.py` | direct : suivi de la playlist, traduction au fil de l'eau, affichage synchronisé |
 | `player.py` | lancement de mpv (pilotage par IPC, surimpression) ou VLC |
-| `pipeline.py` | enchaînement : trouver la bonne piste puis la récupérer |
+| `pipeline.py` | choix de la source : HLS, MKV indexé, lecture complète, Whisper |
+| `mkv.py` | lecture rapide des sous-titres d'un MKV via son index et des requêtes « Range » |
+| `transcribe.py` | transcription Whisper : découpage du son, moteurs mlx / faster-whisper |
 | `gui.py`, `gui.html` | interface graphique : serveur local (127.0.0.1, jeton de session) et page web |
 
 ## Limites actuelles et prochaines étapes
@@ -111,7 +135,8 @@ répliques ID ──► replay : fichier .srt ──► player.py (mpv ou VLC, -
 - **Direct sans pistes WebVTT** (MPEG-TS brut avec sous-titres intégrés) : non géré, seul le
   direct HLS avec pistes WebVTT l'est.
 - **Sous-titres en image** (DVB, PGS) ou **incrustés** : nécessitent de l'OCR (Tesseract).
-- **Pas de sous-titres du tout** : transcrire l'audio avec Whisper (faster-whisper), puis traduire.
+- **Whisper en direct** : pas encore géré (films et séries seulement).
+- **MP4 avec sous-titres** : pas encore de lecture rapide (l'index MP4 le permettrait aussi).
 - **DASH (.mpd)** : pistes TTML/WebVTT à ajouter.
 - **Contenu protégé par DRM** (Widevine) : ni mpv ni VLC ne peuvent le lire ; hors du périmètre.
 

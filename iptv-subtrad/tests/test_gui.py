@@ -77,12 +77,19 @@ class FakeTranslator:
 class FakePlayer:
     started = []
 
+    def __init__(self, name="vlc"):
+        self.name = name
+        self.stopped = threading.Event()
+
     def start(self, url, subtitle=None, title=None, **kwargs):
         FakePlayer.started.append((url, subtitle and open(subtitle, encoding="utf-8").read(), title))
         return self
 
     def wait(self):
         return 0
+
+    def stop(self):
+        self.stopped.set()
 
 
 @pytest.fixture
@@ -93,6 +100,7 @@ def server(tmp_path):
         player_factory=FakePlayer,
         cache_factory=lambda: TranslationCache(":memory:"),
         hls=HlsClient(FakeSession(PAGES)),
+        whisper_backend=lambda: None,
     )
     srv, token = make_server(app, port=0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -142,7 +150,7 @@ def test_full_flow_load_search_check_watch(server):
         time.sleep(0.05)
     assert jobs[0]["id"] == job["id"]
     assert jobs[0]["state"] == "done", jobs[0]
-    assert (jobs[0]["done"], jobs[0]["total"]) == (3, 3)
+    assert (jobs[0]["found"], jobs[0]["translated"], jobs[0]["player"]) == (3, 3, "VLC")
     url, srt, title = FakePlayer.started[-1]
     assert url == f"{BASE}movie/master.m3u8" and title == "Le Dîner de cons"
     assert "ID Bonjour." in srt

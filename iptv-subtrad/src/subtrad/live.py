@@ -190,6 +190,7 @@ def run_live(
     segments_behind: int = 6,
     offset_ms: int = 0,
     hls: HlsClient | None = None,
+    should_stop: Callable[[], bool] = lambda: False,
 ) -> int:
     timeline = Timeline()
     worker = LiveTranslator(LiveSubtitleFeed(track, hls), translator, timeline, cache, batch_size)
@@ -199,7 +200,9 @@ def run_live(
     worker.start()
     try:
         player.start(url, live_segments_behind=segments_behind)
-        display_loop(player, timeline, offset_ms)
+        display_loop(player, timeline, offset_ms, should_stop=should_stop)
+        if should_stop() and hasattr(player, "stop"):
+            player.stop()
         return player.wait()
     finally:
         worker.stop()

@@ -24,11 +24,17 @@ _HTTP_HINTS = {
 }
 
 
+class Cancelled(Exception):
+    """L'utilisateur a cliqué sur « Annuler »."""
+
+
 def redact_urls(text: str) -> str:
     return _URL_RE.sub("[lien]", text)
 
 
 def friendly_error(exc: BaseException) -> str:
+    if isinstance(exc, Cancelled):
+        return "Annulé."
     if isinstance(exc, requests.HTTPError) and exc.response is not None:
         code = exc.response.status_code
         hint = f" ({_HTTP_HINTS[code]})" if code in _HTTP_HINTS else ""

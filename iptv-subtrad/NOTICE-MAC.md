@@ -44,11 +44,15 @@ Ouvre le Terminal et colle cette ligne :
 
 ## Étape 3 : installer les outils
 
-Colle cette ligne (elle installe le lecteur vidéo, ffmpeg et un outil pour installer le programme) :
+Colle ces deux lignes, une à la fois (elles installent les lecteurs vidéo VLC et mpv, ffmpeg et
+un outil pour installer le programme) :
 
 ```
 brew install mpv ffmpeg pipx
+brew install --cask vlc
 ```
+
+(Si VLC est déjà dans ton dossier Applications, la deuxième ligne le signale simplement.)
 
 Puis celle-ci :
 
@@ -75,6 +79,25 @@ est finie, `subtrad --help` doit afficher la liste des commandes.
 
 Si tu modifies ou mets à jour le programme plus tard, relance dans ce dossier :
 `pipx install --force .`
+
+## Étape 4 bis : installer Whisper (pour les vidéos sans sous-titres)
+
+Whisper transcrit la voix des vidéos qui n'ont pas de sous-titres en texte. Il tourne **sur ton
+Mac**, gratuitement ; seule la traduction reste payante. Dans le dossier `iptv-subtrad` (comme à
+l'étape 4), tape :
+
+```
+pipx install --force ".[whisper]"
+```
+
+(guillemets compris). L'installation est longue (plusieurs minutes, ~1 Go). Au **premier**
+usage, Whisper télécharge en plus son modèle (~1,6 Go), une seule fois.
+
+- Sur un Mac à puce Apple (M1, M2, M3, M4 : menu  > « À propos de ce Mac »), Whisper utilise la
+  puce graphique et va vite. Sur un Mac Intel il fonctionne aussi, mais plus lentement.
+- Pour l'essayer seul, sans rien traduire : `subtrad transcrire "chemin ou adresse de la vidéo"`.
+  Il écrit un fichier `transcription.fr.srt`.
+- Si l'installation affiche une erreur, copie-la-moi.
 
 ## Étape 5 : obtenir la clé d'accès à Claude
 
@@ -128,19 +151,27 @@ tu utilises la page ; pour tout arrêter, reviens dans le Terminal et fais **Ctr
 2. **Cherche** dans la barre du haut : les accents et majuscules ne comptent pas, et tu peux
    taper plusieurs mots (« diner cons »). Les onglets **Direct / Films / Séries** et la liste des
    catégories affinent la recherche.
-3. **Sous-titres ?** vérifie, sans rien dépenser, si l'entrée a des sous-titres français
-   utilisables : ✓ en vert, c'est bon ; ✗ en rouge, la raison s'affiche.
-4. **▶ Regarder traduit** : une carte apparaît en bas à droite et indique **où en est le
-   programme**, en 3 étapes :
-   - *Étape 1/3, recherche des sous-titres.* Si les sous-titres sont intégrés au fichier vidéo
-     (cas des films et séries), le programme doit lire **tout le fichier** : ça peut prendre
-     plusieurs minutes. Un pourcentage et le temps restant estimé s'affichent ; le temps écoulé
-     est toujours visible en haut de la carte.
-   - *Étape 2/3, traduction* par Claude, avec le nombre de répliques déjà traduites.
-   - *Étape 3/3, lecture* : mpv s'ouvre avec les sous-titres en indonésien. Le coût estimé de la
-     traduction s'affiche alors dans la carte.
+3. **Sous-titres ?** vérifie, sans rien dépenser, ce qui est possible pour cette vidéo :
+   - **✓ vert** : sous-titres trouvés, récupérés en quelques secondes ;
+   - **✓ orange** : sous-titres trouvés, mais il faudra lire tout le fichier vidéo (plusieurs
+     minutes pour un film) ;
+   - **◐ orange** : pas de sous-titres en texte, la voix sera transcrite par Whisper (plus long) ;
+   - **✗ rouge** : impossible ; la raison s'affiche.
+4. **▶ Regarder traduit** : une carte en bas à droite montre où en est le programme :
+   - la **récupération des sous-titres** (avec un pourcentage et le temps restant quand il faut
+     lire le fichier, ou l'avancement de la transcription Whisper) ;
+   - la **traduction**, qui avance **en même temps** : plusieurs morceaux sont envoyés à Claude
+     en parallèle ;
+   - puis la **lecture**, dans le lecteur choisi dans les réglages :
+     - **VLC** (par défaut) s'ouvre quand toute la traduction est prête ;
+     - **mpv** (« démarrage rapide ») s'ouvre au bout de quelques secondes et reçoit la suite des
+       sous-titres pendant la lecture : c'est le plus rapide, surtout avec Whisper.
+
+   Le bouton **Annuler** arrête tout à n'importe quel moment ; pendant la lecture, il devient
+   **Arrêter** et ferme la vidéo.
 5. **⚙ Réglages** : clé Claude (déjà détectée si tu as fait l'étape 5), modèle (Haiku par
-   défaut), langues, et changement de playlist.
+   défaut), langues, **lecteur vidéo** (VLC ou mpv), **Whisper** (transcrire la voix quand il
+   n'y a pas de sous-titres) et changement de playlist.
 
 Le lien de la playlist et la clé Claude sont enregistrés uniquement sur ce Mac, dans des
 fichiers que toi seul peux lire.
@@ -205,7 +236,8 @@ Quand je corrige ou améliore le programme, refais ceci :
 1. Retélécharge le ZIP (étape 1) et décompresse-le.
 2. Dans le Terminal : `cd ` (avec une espace), glisse le **nouveau** dossier `iptv-subtrad`
    dans la fenêtre, puis Entrée.
-3. Tape `pipx install --force .` (n'oublie pas le point) et Entrée.
+3. Tape `pipx install --force ".[whisper]"` (avec Whisper, voir l'étape 4 bis) ou
+   `pipx install --force .` (sans Whisper), puis Entrée.
 
 ## Dans mpv
 
@@ -242,6 +274,8 @@ Pour VLC, installe-le d'abord avec `brew install --cask vlc`.
 | `command not found: subtrad` | `pipx ensurepath` oublié ou Terminal non rouvert | Refaire l'étape 3 et rouvrir le Terminal |
 | Erreur « authentication » / « API key » | Clé mal copiée ou Terminal non rouvert | Refaire l'étape 5 |
 | « mpv introuvable » | Installation incomplète | `brew install mpv`, puis rouvrir le Terminal |
+| « vlc introuvable » | VLC n'est pas installé | `brew install --cask vlc` (ou choisir mpv dans les réglages) |
+| « Whisper n'est pas installé » | Étape 4 bis non faite | Faire l'étape 4 bis, ou désactiver Whisper dans les réglages |
 | « Aucun sous-titre exploitable trouvé » | La chaîne n'expose pas de sous-titres texte | Voir « Limites » |
 | Une erreur longue en rouge | Variable | Copie le message complet et envoie-le moi |
 
@@ -249,8 +283,9 @@ Pour VLC, installe-le d'abord avec `brew install --cask vlc`.
 
 - **Je n'ai pas pu tester avec un vrai flux ni sur un Mac.** Il y aura peut-être des
   ajustements à faire. Si quelque chose bloque, envoie-moi le message d'erreur exact.
-- Le programme ne marche que si la chaîne fournit des **sous-titres en texte**. C'est pour ça
-  qu'il faut tester avec `subtrad pistes` avant tout.
-- Les flux protégés par DRM (chiffrés) ne peuvent pas être lus par mpv.
+- Sans Whisper, le programme ne marche que si la vidéo fournit des **sous-titres en texte**.
+  Le bouton **Sous-titres ?** le dit avant de lancer quoi que ce soit.
+- Whisper n'est pas encore utilisé pour les **directs** (seulement les films et séries).
+- Les flux protégés par DRM (chiffrés) ne peuvent être lus ni par VLC ni par mpv.
 - Un direct n'est géré que s'il est au format HLS (adresse en `.m3u8`) avec des sous-titres en
   pistes séparées. Une adresse qui finit en `.ts` ne convient pas pour le direct.
