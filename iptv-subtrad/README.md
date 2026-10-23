@@ -132,6 +132,31 @@ l'application Android TV. La page du Mac reste limitée à 127.0.0.1.
 
 Les directs ne sont pas encore proposés à la télé.
 
+### Catalogue Xtream Codes (`xtream.py`)
+
+Quand le lien de la playlist est de la forme `…/get.php?username=…&password=…`, le même compte
+donne accès à `player_api.php` : séries regroupées par saison, films, affiches, résumés, genres,
+notes. Le catalogue est gardé dans `~/.cache/subtrad/xtream/catalog.json` (fichier privé) et
+rechargé une fois par jour ; le détail d'une série est gardé une heure. Chaque épisode et chaque
+film est relié à son entrée de la playlist par son numéro (`/series/…/<id>.<ext>`), si bien que
+préparation, sous-titres et lecture utilisent les adresses habituelles (`id` = entrée de la playlist,
+`-1` si absente). Les images qui contiennent l'identifiant, le mot de passe ou l'adresse d'un
+serveur du fournisseur ne sont jamais transmises. Langue : `lang=FR` par défaut (préfixe du nom),
+`lang=` pour tout.
+
+| Requête | Rôle |
+|---|---|
+| `GET /tele/api/catalog` | `{"available": true}` si le lien est Xtream Codes |
+| `GET /tele/api/catalog/categories?type=series\|movie&lang=FR` | catégories non vides, avec leur nombre |
+| `GET /tele/api/catalog/series?category=&q=&offset=&limit=` | séries (nom, affiche, année, note, genre) |
+| `GET /tele/api/catalog/series/info?id=SERIES_ID` | fiche : résumé, genre, acteurs, saisons et épisodes (`id`, durée, `ready`) |
+| `GET /tele/api/catalog/movies?category=&q=&offset=&limit=` | films (`vod_id`, `id`, affiche, `ready`) |
+| `GET /tele/api/catalog/movie?id=VOD_ID` | fiche d'un film : résumé, durée, genre, `id`, `ready` |
+
+Attention : l'abonnement actuel n'autorise **qu'une connexion vidéo à la fois**
+(`max_connections: 1`). Une préparation sur le Mac pendant une lecture sur la télé peut être
+coupée par le serveur (la reprise automatique de ffmpeg limite le problème).
+
 ## Cache
 
 Chaque traduction affiche à la fin son coût estimé (tokens et dollars). Les prix sont dans
@@ -171,6 +196,7 @@ répliques ID ──► replay : fichier .srt ──► player.py (mpv ou VLC, -
 | `transcribe.py` | transcription Whisper : découpage du son, moteurs whisper.cpp / faster-whisper |
 | `gui.py`, `gui.html` | interface graphique : serveur local (127.0.0.1, jeton de session) et page web |
 | `tele.py` | accès télé : serveur sur le Wi-Fi de la maison, protégé par un code |
+| `xtream.py` | catalogue Xtream Codes (séries par saison, films, affiches, résumés) |
 
 ## Limites actuelles et prochaines étapes
 

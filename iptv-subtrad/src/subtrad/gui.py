@@ -38,6 +38,7 @@ from .playlist import Channel, fetch_playlist_text, parse_m3u
 from .store import VideoStore
 from .subtitles import Cue, load_subtitles, save_subtitles
 from .translate import DEFAULT_MODEL, ClaudeTranslator, TranslationPipeline
+from .xtream import Catalog, XtreamAccount, XtreamClient
 
 MODELS = {
     "claude-haiku-5-5": "Haiku (économique, conseillé)",
@@ -225,6 +226,7 @@ class GuiApp:
         transcriber_factory: Callable[[], object] | None = None,
         whisper_backend: Callable[[], str | None] | None = None,
         store: VideoStore | None = None,
+        catalog: Catalog | None = None,
     ):
         self.settings = settings
         self.playlist_cache = playlist_cache
@@ -241,6 +243,7 @@ class GuiApp:
         self._transcriber_factory = transcriber_factory or transcribe.make_transcriber
         self.whisper_backend = whisper_backend or transcribe.backend_name
         self.tv = None  # TvAccess, branché par run_gui
+        self.catalog = catalog or Catalog(self._xtream_client, lambda: self.library.channels)
         if playlist_cache.exists():
             self.library.load_text(playlist_cache.read_text(encoding="utf-8", errors="replace"))
 
@@ -300,6 +303,13 @@ class GuiApp:
         """Oublie les sous-titres gardés pour cette vidéo (pour tout refaire)."""
         self.store.forget(*self._store_args(self.library.get(index)))
         return {"ready": False}
+
+    def _xtream_client(self) -> XtreamClient | None:
+        account = XtreamAccount.from_playlist_source(self.settings["playlist_source"])
+        return XtreamClient(account) if account else None
+
+    def video_ready(self, index: int) -> bool:
+        return self.is_ready(self.library.get(index))
 
     # --- télé ---
 
