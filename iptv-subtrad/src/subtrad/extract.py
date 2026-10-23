@@ -8,7 +8,10 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
 
 from .subtitles import Cue, parse_subtitles
 
@@ -73,15 +76,55 @@ def stream_duration(url: str, timeout: float = 60.0) -> float | None:
         return None
 
 
-def extract_text_track(url: str, track: EmbeddedTrack, timeout: float | None = None) -> list[Cue]:
-    """Extrait une piste texte en SRT. Sur un flux réseau, ffmpeg lit tout le flux."""
+def parse_progress_line(line: str) -> float | None:
+    """Position de lecture en secondes d'après une ligne `-progress` de ffmpeg, sinon None."""
+    key, _, value = line.strip().partition("=")
+    if key not in ("out_time_us", "out_time_ms"):  # (out_time_ms est lui aussi en microsecondes)
+        return None
+    try:
+        return int(value) / 1_000_000
+    except ValueError:  # « N/A » au tout début
+        return None
+
+
+def extract_text_track(
+    url: str,
+    track: EmbeddedTrack,
+    duration: float | None = None,
+    on_progress: Callable[[float], None] | None = None,
+) -> list[Cue]:
+    """Extrait une piste texte. Sur un flux réseau, ffmpeg doit lire tout le fichier.
+
+    `on_progress(fraction)` est appelé pendant la lecture (0 à 1) quand `duration`, la
+    durée du fichier en secondes, est connue.
+    """
     if not track.is_text:
         raise ValueError(
             f"La piste {track.index} ({track.codec}) est une image : il faudrait de l'OCR."
         )
-    out = subprocess.run(
-        [_require("ffmpeg"), "-v", "error", "-i", url,
-         "-map", f"0:s:{track.index}", "-f", "srt", "-"],
-        capture_output=True, text=True, timeout=timeout, check=True,
-    ).stdout
-    return parse_subtitles(out, "srt")
+    with tempfile.TemporaryDirectory(prefix="subtrad-") as tmp:
+        out_path = Path(tmp) / "sous-titres.srt"
+        with open(Path(tmp) / "ffmpeg.log", "w+", encoding="utf-8") as log:
+            process = subprocess.Popen(
+                [_require("ffmpeg"), "-v", "error", "-nostdin", "-y",
+                 "-progress", "pipe:1", "-nostats", "-stats_period", "0.5",
+                 "-i", url, "-map", f"0:s:{track.index}", "-f", "srt", str(out_path)],
+                stdout=subprocess.PIPE, stderr=log, text=True,
+            )
+            try:
+                for line in process.stdout:
+                    position = parse_progress_line(line)
+                    if position is not None and duration and on_progress:
+                        on_progress(max(0.0, min(1.0, position / duration)))
+                process.wait()
+            except BaseException:
+                process.kill()
+                raise
+            if process.returncode != 0:
+                log.seek(0)
+                raise RuntimeError(
+                    f"ffmpeg n'a pas pu lire les sous-titres : {log.read().strip()[-300:]}"
+                )
+        if on_progress:
+            on_progress(1.0)
+        return parse_subtitles(out_path.read_text(encoding="utf-8", errors="replace"), "srt")

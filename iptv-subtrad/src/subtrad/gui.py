@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unicodedata
 import uuid
 import webbrowser
@@ -154,11 +155,14 @@ class Job:
     id: str
     title: str
     state: str = "running"  # running | playing | done | error
+    phase: int = 1  # 1 = recherche des sous-titres, 2 = traduction, 3 = lecture
     step: str = "Recherche des sous-titres…"
+    fraction: float | None = None  # avancement de l'étape en cours (0 à 1), None si inconnu
     done: int = 0
     total: int = 0
     usage: str = ""
     error: str = ""
+    started_at: float = 0.0  # horodatage UNIX : la page en déduit le temps écoulé
 
 
 class GuiApp:
@@ -219,23 +223,32 @@ class GuiApp:
 
     def watch(self, index: int) -> Job:
         channel = self.library.get(index)
-        job = Job(id=uuid.uuid4().hex[:8], title=channel.name)
+        job = Job(id=uuid.uuid4().hex[:8], title=channel.name, started_at=time.time())
         self.jobs[job.id] = job
         threading.Thread(target=self._run_watch, args=(job, channel), daemon=True).start()
         return job
 
     def _run_watch(self, job: Job, channel: Channel) -> None:
         translator = None
+
+        def status(message: str, fraction: float | None = None) -> None:
+            job.step, job.fraction = message, fraction
+
         try:
             translator = self.make_translator(self.settings)
-            source = fetch_source_subtitles(channel.url, self.settings["depuis"], hls=self.hls)
+            source = fetch_source_subtitles(
+                channel.url, self.settings["depuis"], hls=self.hls, on_status=status
+            )
             cache = self.make_cache()
             if source.live_track:
-                job.state, job.step = "playing", "Direct : lecture dans mpv, traduction au fil de l'eau."
+                job.state, job.phase, job.fraction = "playing", 3, None
+                job.step = "Direct : lecture dans mpv, traduction au fil de l'eau."
                 run_live(channel.url, source.live_track, translator, self.make_player(), cache,
                          hls=self.hls)
             else:
-                job.total, job.step = len(source.cues), "Traduction des sous-titres…"
+                job.phase, job.fraction = 2, None
+                job.total = len(source.cues)
+                job.step = "Traduction des sous-titres par Claude…"
 
                 def progress(done: int, total: int) -> None:
                     job.done = job.total - total + done  # le cache a pu en traduire une partie
@@ -244,7 +257,8 @@ class GuiApp:
                 job.done, job.usage = job.total, translator.usage_summary()
                 sub_path = Path(tempfile.mkdtemp(prefix="subtrad-")) / f"sous-titres.{self.settings['vers']}.srt"
                 save_subtitles(translated, sub_path)
-                job.state, job.step = "playing", "Lecture en cours dans mpv."
+                job.state, job.phase = "playing", 3
+                job.step = "Lecture en cours dans mpv."
                 self.make_player().start(channel.url, sub_path, title=channel.name).wait()
             job.state, job.step = "done", "Terminé."
         except Exception as exc:

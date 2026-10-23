@@ -130,8 +130,15 @@ tu utilises la page ; pour tout arrêter, reviens dans le Terminal et fais **Ctr
    catégories affinent la recherche.
 3. **Sous-titres ?** vérifie, sans rien dépenser, si l'entrée a des sous-titres français
    utilisables : ✓ en vert, c'est bon ; ✗ en rouge, la raison s'affiche.
-4. **▶ Regarder traduit** lance la traduction (une barre de progression apparaît en bas à
-   droite, avec le coût), puis ouvre mpv avec les sous-titres en indonésien.
+4. **▶ Regarder traduit** : une carte apparaît en bas à droite et indique **où en est le
+   programme**, en 3 étapes :
+   - *Étape 1/3, recherche des sous-titres.* Si les sous-titres sont intégrés au fichier vidéo
+     (cas des films et séries), le programme doit lire **tout le fichier** : ça peut prendre
+     plusieurs minutes. Un pourcentage et le temps restant estimé s'affichent ; le temps écoulé
+     est toujours visible en haut de la carte.
+   - *Étape 2/3, traduction* par Claude, avec le nombre de répliques déjà traduites.
+   - *Étape 3/3, lecture* : mpv s'ouvre avec les sous-titres en indonésien. Le coût estimé de la
+     traduction s'affiche alors dans la carte.
 5. **⚙ Réglages** : clé Claude (déjà détectée si tu as fait l'étape 5), modèle (Haiku par
    défaut), langues, et changement de playlist.
 

@@ -25,6 +25,11 @@ def _progress(done: int, total: int) -> None:
         print(file=sys.stderr)
 
 
+def _status(message: str, fraction: float | None = None) -> None:
+    """Affiche l'étape en cours sur une seule ligne qui se met à jour."""
+    print(f"\r\033[K  {message}", end="", file=sys.stderr, flush=True)
+
+
 def _translator(args) -> ClaudeTranslator:
     return ClaudeTranslator(
         source=args.depuis, target=args.vers, model=args.modele, effort=args.effort
@@ -110,7 +115,8 @@ def cmd_regarder(args) -> int:
     from .player import make_player  # import tardif : inutile pour les autres commandes
 
     print("Recherche des sous-titres…", file=sys.stderr)
-    source = fetch_source_subtitles(args.url, args.depuis, prefer_sdh=args.sme)
+    source = fetch_source_subtitles(args.url, args.depuis, prefer_sdh=args.sme, on_status=_status)
+    print("\r\033[K", end="", file=sys.stderr)
     if source.live_track:
         return _regarder_direct(args, source)
     print(f"  {len(source.cues)} répliques ({source.origin})", file=sys.stderr)

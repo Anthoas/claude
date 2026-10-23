@@ -75,6 +75,9 @@
   .job .close { border: 0; background: none; padding: 0 4px; color: var(--muted); }
   .bar { height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; margin: 6px 0; }
   .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  .bar.indeterminate > div { width: 35%; animation: slide 1.2s ease-in-out infinite alternate; }
+  @keyframes slide { from { margin-left: 0; } to { margin-left: 65%; } }
+  .phase { font-size: 12px; color: var(--muted); }
 
   dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
            color: var(--text); width: min(520px, calc(100vw - 32px)); padding: 20px; }
@@ -326,7 +329,16 @@ function renderItem(item) {
 async function checkItem(item, button, status) {
   button.disabled = true;
   status.className = "status muted";
-  status.replaceChildren(el("span", { className: "spinner" }), "Vérification…");
+  const started = Date.now();
+  const label = el("span");
+  status.replaceChildren(el("span", { className: "spinner" }), label);
+  const tick = () => {
+    const sec = Math.floor((Date.now() - started) / 1000);
+    label.textContent = sec < 8 ? `Vérification… ${sec} s`
+      : `Vérification… ${sec} s (fichier volumineux ou serveur lent : patience)`;
+  };
+  tick();
+  const timer = setInterval(tick, 1000);
   try {
     const r = await api("/api/check", { id: item.id });
     status.className = `status ${r.ok ? "ok" : "ko"}`;
@@ -335,6 +347,7 @@ async function checkItem(item, button, status) {
     status.className = "status ko";
     status.textContent = e.message;
   } finally {
+    clearInterval(timer);
     button.disabled = false;
   }
 }
@@ -380,6 +393,13 @@ async function pollJobs() {
   pollTimer = setTimeout(pollJobs, active ? 1000 : 5000);
 }
 
+const PHASES = ["Recherche des sous-titres", "Traduction", "Lecture"];
+
+function elapsedText(startedAt) {
+  const sec = Math.max(0, Math.floor(Date.now() / 1000 - startedAt));
+  return sec < 60 ? `${sec} s` : `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, "0")} s`;
+}
+
 function renderJobs(jobs) {
   $("#jobs").replaceChildren(...jobs.slice(0, 4).map((job) => {
     const close = el("button", { className: "close", textContent: "×", title: "Masquer" });
@@ -387,15 +407,24 @@ function renderJobs(jobs) {
     const card = el("div", { className: `job ${job.state}` },
       el("div", { className: "title" }, el("span", { textContent: job.title }), close));
     if (job.state === "running") {
-      card.append(el("div", { className: "muted" }, el("span", { className: "spinner" }), job.step));
+      card.append(
+        el("div", { className: "phase", textContent:
+          `Étape ${job.phase}/3 · ${PHASES[job.phase - 1]} · depuis ${elapsedText(job.started_at)}` }),
+        el("div", {}, el("span", { className: "spinner" }), job.step));
+      // Avancement de l'étape : mesuré si on le connaît, sinon une barre qui va et vient.
+      let fraction = job.fraction;
+      let detail = fraction != null ? `${Math.round(fraction * 100)} %` : "";
+      if (fraction == null && job.phase === 2 && job.total) {
+        fraction = job.done / job.total;
+        detail = `${fmt(job.done)} / ${fmt(job.total)} répliques`;
+      }
+      const bar = el("div", { className: "bar" + (fraction == null ? " indeterminate" : "") }, el("div"));
+      if (fraction != null) bar.firstChild.style.width = `${Math.round(fraction * 100)}%`;
+      card.append(bar);
+      if (detail) card.append(el("div", { className: "muted", textContent: detail }));
     } else {
       card.append(el("div", { className: job.state === "error" ? "error" : "muted",
                               textContent: job.state === "error" ? `Erreur : ${job.error}` : job.step }));
-    }
-    if (job.total && job.state === "running") {
-      const bar = el("div", { className: "bar" }, el("div"));
-      bar.firstChild.style.width = `${Math.round((100 * job.done) / job.total)}%`;
-      card.append(bar, el("div", { className: "muted", textContent: `${fmt(job.done)} / ${fmt(job.total)} répliques` }));
     }
     if (job.usage) card.append(el("div", { className: "muted", textContent: job.usage }));
     return card;
