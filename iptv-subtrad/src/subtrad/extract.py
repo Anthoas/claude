@@ -72,6 +72,27 @@ def _require(binary: str) -> str:
     return path
 
 
+def network_input_args(url: str) -> list[str]:
+    """Options d'entrée de ffmpeg pour un fichier en ligne : certains serveurs IPTV coupent la
+    connexion au bout de quelques centaines de Mo. Sans elles, ffmpeg s'arrête sans erreur
+    (code 0) comme si le fichier était fini ; avec elles, il reprend là où il en était."""
+    if not url.startswith(("http://", "https://")):
+        return []
+    return ["-reconnect", "1", "-reconnect_on_network_error", "1", "-reconnect_delay_max", "10"]
+
+
+def check_complete(read_seconds: float, duration: float | None, what: str) -> None:
+    """Refuse une lecture arrêtée nettement avant la fin connue du fichier. Valable pour le son,
+    qui couvre toute la durée ; pas pour une piste de sous-titres, qui s'arrête à la dernière
+    réplique, parfois des minutes avant la fin (générique)."""
+    if duration and read_seconds < duration * 0.95:
+        raise RuntimeError(
+            f"Le serveur a coupé la lecture {what} à {int(read_seconds // 60)} min sur "
+            f"{int(duration // 60)} min. Réessaie dans un moment (une autre lecture en cours "
+            "sur le même abonnement peut en être la cause)."
+        )
+
+
 @dataclass
 class ProbeResult:
     tracks: list[EmbeddedTrack]
@@ -189,7 +210,7 @@ def iter_text_track(
     process = subprocess.Popen(
         [_require("ffmpeg"), "-v", "error", "-nostdin",
          "-progress", "pipe:2", "-nostats", "-stats_period", "0.5",
-         "-i", url, "-map", f"0:s:{track.index}",
+         *network_input_args(url), "-i", url, "-map", f"0:s:{track.index}",
          # Écrire chaque réplique dès qu'elle est lue (sinon ffmpeg les garde en mémoire tampon).
          "-flush_packets", "1", "-f", "srt", "-"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,

@@ -32,7 +32,7 @@ from typing import Callable, Iterator, NamedTuple, Protocol
 import requests
 
 from .errors import Cancelled
-from .extract import _require, kill_when_cancelled
+from .extract import _require, check_complete, kill_when_cancelled, network_input_args
 from .subtitles import Cue
 
 SAMPLE_RATE = 16_000
@@ -237,11 +237,13 @@ def iter_audio_chunks(
     cancel: threading.Event | None = None,
     chunk_seconds: float = CHUNK_SECONDS,
     search_seconds: float = SEARCH_SECONDS,
+    duration: float | None = None,
 ) -> Iterator[tuple[float, bytes]]:
     """Donne (début en secondes, son PCM s16le) par morceaux d'environ `chunk_seconds`,
-    coupés sur un silence. `on_position(secondes)` suit la lecture du son."""
+    coupés sur un silence. `on_position(secondes)` suit la lecture du son. Avec `duration`,
+    une lecture coupée avant la fin est une erreur (jamais une transcription incomplète)."""
     process = subprocess.Popen(
-        [_require("ffmpeg"), "-v", "error", "-nostdin", "-i", url,
+        [_require("ffmpeg"), "-v", "error", "-nostdin", *network_input_args(url), "-i", url,
          "-vn", "-sn", "-dn", "-ac", "1", "-ar", str(SAMPLE_RATE), "-f", "s16le", "-"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
@@ -271,6 +273,7 @@ def iter_audio_chunks(
         if process.returncode != 0:
             message = process.stderr.read().decode("utf-8", "replace").strip()[-300:]
             raise RuntimeError(f"ffmpeg n'a pas pu lire le son : {message}")
+        check_complete(read / 2 / SAMPLE_RATE, duration, "du son")
         usable = len(buffer) - len(buffer) % 2
         if usable > SAMPLE_RATE:  # plus d'une demi-seconde
             yield offset / SAMPLE_RATE, bytes(buffer[:usable])
@@ -366,7 +369,7 @@ def iter_transcribed_cues(
     if hasattr(transcriber, "prepare"):
         transcriber.prepare(on_status)  # télécharge le modèle au premier usage
     status("Transcription de la voix (Whisper) : premier morceau…")
-    for offset, audio in iter_audio_chunks(url, cancel=cancel):
+    for offset, audio in iter_audio_chunks(url, cancel=cancel, duration=duration):
         if cancel is not None and cancel.is_set():
             raise Cancelled()
         chunk_s = len(audio) / 2 / SAMPLE_RATE

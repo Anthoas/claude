@@ -357,3 +357,76 @@ def test_model_is_downloaded_once_with_progress(tmp_path, monkeypatch):
     assert path == again and path.read_bytes() == payload and len(hits) == 1
     assert statuses[-1][1] == 1.0 and "3 Mo" in statuses[-1][0]
     assert not path.with_name("modele.bin.part").exists()
+
+
+class _CuttingServer:
+    """Serveur HTTP qui coupe la première réponse en plein milieu (comme certains serveurs
+    IPTV) mais accepte de reprendre la suite avec un en-tête Range."""
+
+    def __init__(self, path, cut_at, always_cut=False):
+        import http.server
+        import threading
+
+        data = path.read_bytes()
+        self.requests = 0
+        server_self = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                server_self.requests += 1
+                start = 0
+                rng = self.headers.get("Range", "")
+                if rng.startswith("bytes="):
+                    start = int(rng[6:].split("-")[0] or 0)
+                self.send_response(206 if start else 200)
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Accept-Ranges", "bytes")
+                self.send_header("Content-Length", str(len(data) - start))
+                if start:
+                    self.send_header("Content-Range", f"bytes {start}-{len(data) - 1}/{len(data)}")
+                self.end_headers()
+                end = len(data)
+                if start == 0 or always_cut:
+                    end = min(len(data), start + cut_at)
+                try:
+                    self.wfile.write(data[start:end])
+                except OSError:
+                    pass
+                self.close_connection = True
+
+        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}/voix.wav"
+
+    def close(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+
+@needs_ffmpeg
+def test_audio_read_survives_a_server_that_cuts_the_connection(tmp_path):
+    wav = tmp_path / "voix.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=60",
+                    "-ar", "16000", str(wav)], check=True)
+    server = _CuttingServer(wav, cut_at=wav.stat().st_size // 3)
+    try:
+        chunks = list(iter_audio_chunks(server.url, duration=60))
+    finally:
+        server.close()
+    total = sum(len(a) for _, a in chunks) / 2 / SAMPLE_RATE
+    assert abs(total - 60) < 0.5 and server.requests >= 2  # coupé, puis repris
+
+
+@needs_ffmpeg
+def test_audio_read_stopped_before_the_end_is_an_error(tmp_path):
+    wav = tmp_path / "court.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=20",
+                    "-ar", "16000", str(wav)], check=True)
+    # Le fichier ne fait que 20 s alors que la vidéo en annonce 60 : lecture incomplète.
+    with pytest.raises(RuntimeError, match="coupé la lecture du son à 0 min sur 1 min"):
+        list(iter_audio_chunks(str(wav), duration=60))
+    from subtrad.extract import network_input_args
+    assert "-reconnect" in network_input_args("http://x/y.mkv") and network_input_args("/tmp/y.mkv") == []
