@@ -157,7 +157,14 @@ class ClaudeTranslator:
         by_id = {item["id"]: item["text"] for item in json.loads(raw)["translations"]}
         missing = [i for i in range(len(texts)) if i not in by_id]
         if missing:
-            raise TranslationError(f"Répliques non traduites : {missing}")
+            if len(texts) == 1:
+                # Toujours absente : on garde l'original plutôt que d'interrompre tout le film.
+                log.warning("Réplique non traduite (absente de la réponse) : %r", texts[0])
+                return list(texts)
+            # Réponse incomplète : on redemande seulement les répliques oubliées.
+            log.warning("Répliques absentes de la réponse, nouvelle demande : %s", missing)
+            retried = self.translate_batch([texts[i] for i in missing], context)
+            by_id.update(zip(missing, retried))
         return [by_id[i] for i in range(len(texts))]
 
 

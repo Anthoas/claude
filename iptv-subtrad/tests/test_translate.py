@@ -161,3 +161,24 @@ def test_cache_can_be_used_from_another_thread(tmp_path):
     thread.start()
     thread.join()
     assert errors == []
+
+
+def test_missing_cues_are_asked_again_then_kept_in_the_original():
+    replies = [
+        # Lot de 6 : la réplique n° 4 est oubliée.
+        {"translations": [{"id": i, "text": f"ID{i}"} for i in (0, 1, 2, 3, 5)]},
+        # Nouvelle demande pour elle seule : encore oubliée.
+        {"translations": []},
+    ]
+    calls = []
+
+    def create(**kwargs):
+        calls.append(json.loads(kwargs["messages"][0]["content"])["cues"])
+        return SimpleNamespace(stop_reason="end_turn", stop_details=None,
+                               content=[SimpleNamespace(type="text", text=json.dumps(replies.pop(0)))])
+
+    client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    texts = [f"fr{i}" for i in range(6)]
+    result = ClaudeTranslator(client=client).translate_batch(texts, [])
+    assert result == ["ID0", "ID1", "ID2", "ID3", "fr4", "ID5"]  # un film entier n'échoue plus pour une réplique
+    assert calls[1] == [{"id": 0, "text": "fr4"}]  # seule la réplique oubliée est redemandée
