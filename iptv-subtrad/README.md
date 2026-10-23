@@ -7,6 +7,8 @@ Fonctionne en replay / VOD (mpv ou VLC) et en **direct** (mpv).
 On traduit depuis la piste **française** plutôt que depuis l'anglais : on évite de traduire une
 traduction, et le sens est mieux conservé.
 
+> **Pas développeur ? Sur Mac ?** Suis la [notice pas à pas](NOTICE-MAC.md).
+
 ## Installation
 
 Prérequis : Python 3.10+, [mpv](https://mpv.io) (recommandé) ou [VLC](https://www.videolan.org),
