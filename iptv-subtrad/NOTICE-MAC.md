@@ -69,8 +69,9 @@ pipx ensurepath
 pipx install .
 ```
 
-(Le point à la fin est important.) À la fin, `subtrad --help` doit afficher la liste des
-commandes.
+**Attention au point à la fin** : tape `pipx install`, une espace, puis un point. Sans lui, le
+Terminal répond « the following arguments are required: package_spec ». Quand l'installation
+est finie, `subtrad --help` doit afficher la liste des commandes.
 
 Si tu modifies ou mets à jour le programme plus tard, relance dans ce dossier :
 `pipx install --force .`
