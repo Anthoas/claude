@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -51,7 +52,11 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import fr.gege.tv.Channel
+import fr.gege.tv.Program
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private const val OVERLAY_MS = 6_000L
 
@@ -61,7 +66,14 @@ private const val OVERLAY_MS = 6_000L
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(channel: Channel, isFavorite: Boolean, onToggleFavorite: () -> Unit, onExit: () -> Unit) {
+fun PlayerScreen(
+    channel: Channel,
+    isFavorite: Boolean,
+    programs: List<Program>,
+    onOpen: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onExit: () -> Unit,
+) {
     val context = LocalContext.current
     var overlay by remember { mutableStateOf(true) }
     var touched by remember { mutableIntStateOf(0) } // relance le compte à rebours du bandeau
@@ -84,6 +96,8 @@ fun PlayerScreen(channel: Channel, isFavorite: Boolean, onToggleFavorite: () -> 
                 playWhenReady = true
             }
     }
+
+    LaunchedEffect(channel) { onOpen() } // le programme de la chaîne, pour le bandeau
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -164,16 +178,32 @@ fun PlayerScreen(channel: Channel, isFavorite: Boolean, onToggleFavorite: () -> 
                 Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color(0xE6000000), Color.Transparent)))
-                    .padding(horizontal = 48.dp, vertical = 28.dp),
+                    // Sombre jusque sous la dernière ligne, pour rester lisible sur une image claire.
+                    .background(Brush.verticalGradient(listOf(Color(0xF0000000), Color(0xD9000000), Color.Transparent)))
+                    .padding(start = 48.dp, end = 48.dp, top = 28.dp, bottom = 64.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(24.dp),
             ) {
                 ChannelLogo(channel, Modifier.width(120.dp).aspectRatio(16f / 9f))
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(channel.name, style = MaterialTheme.typography.headlineSmall, maxLines = 1,
                          overflow = TextOverflow.Ellipsis)
-                    if (channel.group.isNotBlank()) Text(channel.group, color = Color(0xFFD1D5DB), maxLines = 1)
+                    val current = programs.firstOrNull()?.takeIf { it.start <= System.currentTimeMillis() }
+                    if (current == null) {
+                        if (channel.group.isNotBlank()) Text(channel.group, color = Color(0xFFD1D5DB), maxLines = 1)
+                    } else {
+                        Text("${hours(current)} · ${current.title}", style = MaterialTheme.typography.titleMedium,
+                             maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        ProgressBar(current.progress(System.currentTimeMillis()).toDouble(),
+                                    Modifier.width(360.dp).height(6.dp))
+                        if (current.description.isNotBlank()) {
+                            Text(current.description, color = Color(0xFFD1D5DB), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    programs.firstOrNull { it.start > System.currentTimeMillis() }?.let { next ->
+                        Text("Ensuite ${clock(next.start)} · ${next.title}", color = Color(0xFF9CA3AF),
+                             maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
                 Button(onClick = { onToggleFavorite(); touched++ }, modifier = Modifier.focusRequester(favoriteButton)) {
                     Text(if (isFavorite) "★ Retirer des favoris" else "☆ Ajouter aux favoris")
@@ -197,6 +227,13 @@ fun PlayerScreen(channel: Channel, isFavorite: Boolean, onToggleFavorite: () -> 
         }
     }
 }
+
+private val CLOCK = SimpleDateFormat("HH:mm", Locale.FRANCE)
+
+fun clock(time: Long): String = CLOCK.format(Date(time))
+
+/** « 11:50 – 12:50 » */
+fun hours(program: Program): String = "${clock(program.start)} – ${clock(program.end)}"
 
 /**
  * Les directs IPTV ont souvent une adresse sans extension (…/12345). Sans indication, le lecteur

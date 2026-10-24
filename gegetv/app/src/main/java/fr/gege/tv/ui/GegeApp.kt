@@ -15,7 +15,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -38,8 +40,14 @@ import androidx.tv.material3.darkColorScheme
 import androidx.compose.foundation.Image
 import fr.gege.tv.Channel
 import fr.gege.tv.ChannelStore
+import fr.gege.tv.Guide
+import fr.gege.tv.Program
 import fr.gege.tv.Prefs
 import fr.gege.tv.R
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 const val TAB_FAVORITES = 0
@@ -57,6 +65,19 @@ class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
     var playlistUrl by mutableStateOf(prefs.playlistUrl)
     var query by mutableStateOf("")
     var tab by mutableIntStateOf(TAB_FAVORITES)
+
+    /** Programme connu de chaque chaîne (par adresse) et l'heure, avancée chaque minute. */
+    val programs = mutableStateMapOf<String, List<Program>>()
+    var now by mutableLongStateOf(System.currentTimeMillis())
+    private val guide = Guide()
+
+    fun programsOf(channel: Channel): List<Program> = programs[channel.url].orEmpty().filter { it.end > now }
+
+    /** Demande le programme de ces chaînes (le guide le garde : pas de nouvelle demande s'il est à jour). */
+    suspend fun loadPrograms(list: List<Channel>) = coroutineScope {
+        list.map { channel -> async { channel.url to guide.programs(channel) } }.awaitAll()
+            .forEach { (url, found) -> programs[url] = found }
+    }
 
     fun isFavorite(channel: Channel) = favorites.any { it.url == channel.url }
 
@@ -99,6 +120,14 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
     var playing by remember { mutableStateOf<Channel?>(null) }
 
     LaunchedEffect(Unit) { state.start() }
+    // Chaque minute : l'heure avance (barres d'avancement) et le programme des favoris est vérifié.
+    LaunchedEffect(Unit) {
+        while (true) {
+            state.now = System.currentTimeMillis()
+            state.loadPrograms(state.favorites.toList() + listOfNotNull(playing))
+            delay(60_000)
+        }
+    }
     BackHandler(enabled = playing != null) { playing = null }
 
     MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFFE8B04B))) {
@@ -112,6 +141,8 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
                 PlayerScreen(
                     channel = channel,
                     isFavorite = state.isFavorite(channel),
+                    programs = state.programsOf(channel),
+                    onOpen = { scope.launch { state.loadPrograms(listOf(channel)) } },
                     onToggleFavorite = { state.toggleFavorite(channel) },
                     onExit = { playing = null },
                 )

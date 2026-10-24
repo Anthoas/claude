@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -80,8 +81,15 @@ fun FavoritesScreen(state: GegeState, onPlay: (Channel) -> Unit) {
                 Card(onClick = { onPlay(channel) }, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
                     ChannelLogo(channel, Modifier.fillMaxSize())
                 }
-                Text(channel.name, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                      modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                // L'émission en cours, avec une petite barre qui montre où elle en est.
+                state.programsOf(channel).firstOrNull()?.takeIf { it.start <= state.now }?.let { current ->
+                    Text(current.title, color = GRAY, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                         textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall,
+                         modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp))
+                    ProgressBar(current.progress(state.now).toDouble(), Modifier.height(4.dp))
+                }
             }
         }
     }
