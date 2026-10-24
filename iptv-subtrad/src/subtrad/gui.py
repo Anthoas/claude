@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -406,7 +407,14 @@ class GuiApp:
         while source.name.casefold() in taken:  # deux sources ne portent jamais le même nom
             source.name, n = f"{base} ({n})", n + 1
         source.slot = self._next_slot()
-        self._load_source(source, text or None)  # lève une erreur si ça ne marche pas
+        try:
+            self._load_source(source, text or None)  # lève une erreur si ça ne marche pas
+        except Exception as exc:
+            # Beaucoup de serveurs répondent 401, 403 ou 404 à un mauvais identifiant.
+            if kind in ("xtream", "m3u") and re.search(r"\b(401|403|404)\b", friendly_error(exc)):
+                raise ValueError("Source refusée : identifiant ou mot de passe incorrect, "
+                                 "ou adresse du serveur incorrecte.") from exc
+            raise
         self.sources.append(source)
         self._save_sources()
         self._show_active()  # la nouvelle source n'est pas utilisée d'office (sauf si c'est la seule)

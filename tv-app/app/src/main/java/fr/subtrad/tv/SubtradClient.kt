@@ -101,6 +101,16 @@ data class Sheet(
     val titlesPending: Boolean = false, // titres traduits en cours (à redemander)
 )
 
+/** Une source du Mac (jamais l'identifiant ni le mot de passe : le Mac ne les renvoie pas). */
+data class SourceInfo(
+    val id: String,
+    val name: String,
+    val kindLabel: String,
+    val host: String,
+    val count: Int,
+    val active: Boolean,
+)
+
 /** Une préparation (récupération et traduction) qui tourne sur le Mac. */
 data class Job(
     val id: String,
@@ -221,6 +231,31 @@ class SubtradClient(address: String, private val code: String) {
 
     suspend fun movieSheet(vodId: Int): Sheet = sheet(getJson("/tele/api/catalog/movie?id=$vodId"), emptyList())
 
+    // --- sources (comptes Xtream Codes du Mac ; une seule utilisée à la fois) ---
+
+    suspend fun sources(): List<SourceInfo> = sourceList(send("/tele/api/sources", "GET", null))
+
+    /** Le Mac vérifie le compte et télécharge sa liste : peut prendre quelques minutes. */
+    suspend fun addSource(name: String, server: String, username: String, password: String) {
+        send("/tele/api/sources/add", "POST", JSONObject().put("name", name).put("server", server)
+            .put("username", username).put("password", password), timeoutMs = 600_000)
+    }
+
+    suspend fun useSource(id: String): List<SourceInfo> =
+        sourceList(send("/tele/api/sources/activate", "POST", JSONObject().put("id", id), timeoutMs = 300_000))
+
+    suspend fun deleteSource(id: String): List<SourceInfo> =
+        sourceList(send("/tele/api/sources/delete", "POST", JSONObject().put("id", id)))
+
+    private fun sourceList(text: String): List<SourceInfo> {
+        val array = org.json.JSONArray(text)
+        return (0 until array.length()).map { i ->
+            val o = array.getJSONObject(i)
+            SourceInfo(o.optString("id"), o.optString("name"), o.optString("kind_label"), o.optString("host"),
+                       o.optInt("count"), o.optBoolean("active"))
+        }
+    }
+
     /** Où en est la lecture (le Mac s'en souvient : « Vu », reprise). */
     suspend fun saveProgress(id: Int, positionMs: Long, durationMs: Long, ended: Boolean) {
         postJson("/tele/api/progress", JSONObject().put("id", id).put("position", positionMs)
@@ -304,8 +339,12 @@ class SubtradClient(address: String, private val code: String) {
     }
 
     private suspend fun request(path: String, method: String, body: JSONObject?): JSONObject =
+        JSONObject(send(path, method, body))
+
+    private suspend fun send(path: String, method: String, body: JSONObject?, timeoutMs: Int = 60_000): String =
         withContext(Dispatchers.IO) {
             val connection = open(path, method)
+            connection.readTimeout = timeoutMs
             try {
                 if (body != null) {
                     connection.doOutput = true
@@ -313,7 +352,7 @@ class SubtradClient(address: String, private val code: String) {
                     connection.outputStream.use { it.write(body.toString().toByteArray()) }
                 }
                 checkStatus(connection)
-                JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                connection.inputStream.bufferedReader().use { it.readText() }
             } catch (e: IOException) {
                 throw SubtradException(0, e.message ?: "réseau")
             } finally {

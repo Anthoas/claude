@@ -17,7 +17,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
@@ -47,6 +54,7 @@ fun TvTextField(
 ) {
     var focused by remember { mutableStateOf(false) }
     val accent = MaterialTheme.colorScheme.primary
+    val focusManager = LocalFocusManager.current
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
@@ -57,6 +65,18 @@ fun TvTextField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
         keyboardActions = KeyboardActions(onAny = { onSubmit() }),
         modifier = modifier
+            // À la télécommande, les flèches quittent le champ (sinon on ne peut plus en sortir :
+            // gauche et droite déplaçaient seulement le curseur, « Réglages » était inaccessible).
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (event.key) {
+                    Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Down)
+                    Key.DirectionUp -> focusManager.moveFocus(FocusDirection.Up)
+                    Key.DirectionLeft -> focusManager.moveFocus(FocusDirection.Left)
+                    Key.DirectionRight -> focusManager.moveFocus(FocusDirection.Right)
+                    else -> false
+                }
+            }
             .onFocusChanged { focused = it.isFocused }
             .background(Color(0xFF1F2937), RoundedCornerShape(8.dp))
             .border(2.dp, if (focused) accent else Color(0xFF374151), RoundedCornerShape(8.dp))

@@ -45,3 +45,17 @@ Les deux valeurs doivent être données ensemble (une autre application ne peut 
 ```
 adb shell am start -S -n fr.subtrad.tv/.MainActivity --es address 192.168.1.35:8766 --es code CODE
 ```
+
+## Réglages (onglets)
+
+- **Connexion au Mac** : adresse et code (une fois connecté, le sélecteur arrive sur l'onglet, sans
+  ouvrir le clavier).
+- **Sources** : les sources du Mac (une seule utilisée à la fois : seules ses vidéos apparaissent).
+  OK sur une source : « Utiliser cette source », « Annuler » ou « Supprimer » (confirmation).
+  « + Ajouter une source » (Xtream Codes : nom, adresse du serveur, identifiant, mot de passe) : le
+  Mac vérifie le compte et télécharge sa liste (≈ 1 min) ; identifiant et mot de passe partent vers
+  le Mac par le Wi-Fi de la maison et ne reviennent jamais vers la télé.
+
+Dans les champs de saisie, les quatre flèches font sortir du champ (sinon gauche/droite déplaçaient
+le curseur et « Réglages » était inaccessible depuis la recherche).
+

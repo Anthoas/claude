@@ -118,8 +118,8 @@ private fun SourcesPage(state: GegeState, onAdd: () -> Unit) {
                     chosen = null
                     state.run { state.use(source) }
                 })
+                add("Annuler" to { chosen = null }) // avant « Supprimer » : choisi d'office
                 add("Supprimer" to { chosen = null; deleting = source })
-                add("Annuler" to { chosen = null })
             },
             onDismiss = { chosen = null },
         )

@@ -63,7 +63,7 @@ fun SubtradApp(prefs: Prefs) {
             ),
         ) {
             when (val screen = stack.last()) {
-                Screen.Setup -> SetupScreen(prefs) { connected ->
+                Screen.Setup -> SetupScreen(prefs, client, onSourceChanged = { client?.let { home.reset(it) } }) { connected ->
                     client = connected
                     home.reset(connected)
                     stack.clear()

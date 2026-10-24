@@ -2,6 +2,7 @@ package fr.subtrad.tv.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -21,6 +22,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.FilterChip
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import fr.subtrad.tv.Prefs
@@ -28,8 +31,44 @@ import fr.subtrad.tv.R
 import fr.subtrad.tv.SubtradClient
 import kotlinx.coroutines.launch
 
+/**
+ * Réglages : onglet « Connexion au Mac » (adresse et code) et, une fois connecté, onglet « Sources »
+ * (les comptes du Mac, une seule source utilisée à la fois).
+ */
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SetupScreen(prefs: Prefs, onConnected: (SubtradClient) -> Unit) {
+fun SetupScreen(
+    prefs: Prefs,
+    client: SubtradClient?,
+    onSourceChanged: () -> Unit,
+    onConnected: (SubtradClient) -> Unit,
+) {
+    var sourcesTab by remember { mutableStateOf(false) }
+    // Déjà connecté : sélecteur sur l'onglet (sinon le clavier s'ouvrirait sur le champ de l'adresse).
+    val tabFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { if (client != null) runCatching { tabFocus.requestFocus() } }
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 96.dp, vertical = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FilterChip(selected = !sourcesTab, onClick = { sourcesTab = false }, modifier = Modifier.focusRequester(tabFocus)) {
+                Text(stringResource(R.string.settings_tab_connection))
+            }
+            FilterChip(selected = sourcesTab, onClick = { sourcesTab = true }) {
+                Text(stringResource(R.string.settings_tab_sources))
+            }
+        }
+        when {
+            !sourcesTab -> ConnectionPage(prefs, autoFocus = client == null, onConnected)
+            client == null -> Text(stringResource(R.string.sources_need_mac), color = Color(0xFF9CA3AF))
+            else -> SourcesScreen(client, onSourceChanged)
+        }
+    }
+}
+
+@Composable
+private fun ConnectionPage(prefs: Prefs, autoFocus: Boolean, onConnected: (SubtradClient) -> Unit) {
     var address by remember { mutableStateOf(prefs.address) }
     var code by remember { mutableStateOf(prefs.code) }
     var busy by remember { mutableStateOf(false) }
@@ -56,12 +95,9 @@ fun SetupScreen(prefs: Prefs, onConnected: (SubtradClient) -> Unit) {
         }
     }
 
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(Unit) { if (autoFocus) runCatching { first.requestFocus() } }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 96.dp, vertical = 48.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(stringResource(R.string.setup_title), style = MaterialTheme.typography.headlineLarge)
         Text(stringResource(R.string.setup_help), color = Color(0xFFD1D5DB))
         TvTextField(
