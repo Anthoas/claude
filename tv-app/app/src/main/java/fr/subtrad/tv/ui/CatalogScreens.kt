@@ -57,7 +57,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /** Une grille d'affiches (séries ou films) avec ses catégories, gardée quand on ouvre une fiche. */
-class CatalogState(private val scope: CoroutineScope, val type: String) {
+/** `searchOnly` : grille de la page Rechercher (rien n'est chargé avant une recherche, pas de catégories). */
+class CatalogState(private val scope: CoroutineScope, val type: String, private val searchOnly: Boolean = false) {
     var client: SubtradClient? = null
     val categories = mutableStateListOf<Category>()
     var category by mutableStateOf("")
@@ -75,6 +76,10 @@ class CatalogState(private val scope: CoroutineScope, val type: String) {
     private var job: kotlinx.coroutines.Job? = null
 
     fun ensureLoaded() {
+        if (searchOnly) {
+            if (query.isNotBlank() && items.isEmpty() && !loading) load(reset = true)
+            return
+        }
         if (items.isEmpty() && !loading) load(reset = true)
         if (categories.isEmpty()) scope.launch {
             runCatching { client?.categories(type) }.getOrNull()?.let { categories.addAll(it) }

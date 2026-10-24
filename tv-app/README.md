@@ -61,7 +61,8 @@ le curseur et « Réglages » était inaccessible depuis la recherche).
 
 ## Menu de gauche (style ZenIPTV)
 
-Colonne étroite à gauche : le S vert, puis Prêtes à regarder, Films, Séries (la page s'affiche dès
-qu'on passe sur le bouton) et Réglages (s'ouvre avec OK). Petites icônes Material (`res/drawable/ic_*.xml`)
-avec leur nom ; la recherche reste en haut du contenu.
+Colonne étroite à gauche : le S vert, puis Prêtes à regarder, Films, Séries, Rechercher (la page
+s'affiche dès qu'on passe sur le bouton) et Réglages (s'ouvre avec OK). Petites icônes Material
+(`res/drawable/ic_*.xml`) avec leur nom. La page Rechercher a ses propres résultats (« Chercher
+dans : Films / Séries », recherches récentes), sans toucher aux pages Films et Séries.
 

@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
+import androidx.tv.material3.FilterChip
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
@@ -48,7 +49,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val TAB_READY = 0
-private val TAB_KINDS = listOf("", "film", "serie")
+const val TAB_SEARCH = 3
+private val TAB_KINDS = listOf("", "film", "serie", "")
 
 /** Liste et recherche de l'accueil, gardées pendant qu'une vidéo est ouverte. */
 class HomeState(private val scope: CoroutineScope, private val prefs: Prefs) {
@@ -72,13 +74,26 @@ class HomeState(private val scope: CoroutineScope, private val prefs: Prefs) {
         private set
     val seriesGrid = CatalogState(scope, "series")
     val moviesGrid = CatalogState(scope, "movie")
+    /** Page Rechercher : ses propres résultats (films ou séries), sans toucher aux pages Films et Séries. */
+    val searchMovies = CatalogState(scope, "movie", searchOnly = true)
+    val searchSeries = CatalogState(scope, "series", searchOnly = true)
+    var searchKind by mutableIntStateOf(1) // 1 : films, 2 : séries
+        private set
 
-    /** Grille de l'onglet affiché (null : onglet « prêtes » ou pas de catalogue). */
+    /** Grille de la page affichée (null : page « prêtes » ou pas de catalogue). */
     fun grid(): CatalogState? = when {
         catalog != true -> null
         tab == 1 -> moviesGrid
         tab == 2 -> seriesGrid
+        tab == TAB_SEARCH -> if (searchKind == 1) searchMovies else searchSeries
         else -> null
+    }
+
+    fun selectSearchKind(kind: Int) {
+        if (kind == searchKind) return
+        searchKind = kind
+        val g = grid()
+        if (g != null && query.isNotBlank() && g.query != query) g.search(query)
     }
     /** Préparations en cours sur le Mac, par vidéo (suivies même fiche fermée). */
     val preparing = mutableStateMapOf<Int, fr.subtrad.tv.Job>()
@@ -111,14 +126,13 @@ class HomeState(private val scope: CoroutineScope, private val prefs: Prefs) {
 
     fun attach(c: SubtradClient) {
         client = c
-        seriesGrid.client = c
-        moviesGrid.client = c
+        for (g in listOf(seriesGrid, moviesGrid, searchMovies, searchSeries)) g.client = c
     }
 
     fun reset(c: SubtradClient) {
         attach(c)
         catalog = null
-        for (g in listOf(seriesGrid, moviesGrid)) {
+        for (g in listOf(seriesGrid, moviesGrid, searchMovies, searchSeries)) {
             g.items.clear()
             g.categories.clear()
         }
@@ -141,7 +155,7 @@ class HomeState(private val scope: CoroutineScope, private val prefs: Prefs) {
     }
 
     fun search() {
-        if (tab == TAB_READY) tab = 1
+        tab = TAB_SEARCH
         lastOpened = -1
         if (query.isNotBlank()) {
             prefs.addRecentSearch(query)
@@ -179,6 +193,9 @@ class HomeState(private val scope: CoroutineScope, private val prefs: Prefs) {
         error = null
         loadJob = scope.launch {
             try {
+                if (tab == TAB_SEARCH && query.isBlank()) {
+                    items.clear(); total = 0; return@launch
+                }
                 val page = if (tab == TAB_READY) c.ready()
                            else c.search(query, TAB_KINDS[tab], if (append) items.size else 0)
                 if (!append) {
@@ -198,6 +215,7 @@ class HomeState(private val scope: CoroutineScope, private val prefs: Prefs) {
     }
 }
 
+@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
 fun HomeScreen(
     state: HomeState,
@@ -220,17 +238,22 @@ fun HomeScreen(
         }
     }
 
-    // Menu de gauche (style ZenIPTV) : les trois pages, puis Réglages (qui s'ouvre avec OK).
-    val rail = tabs.zip(listOf(R.drawable.ic_ready, R.drawable.ic_movie, R.drawable.ic_series))
+    // Menu de gauche (style ZenIPTV) : les pages (Prêtes, Films, Séries, Rechercher), puis
+    // Réglages (qui s'ouvre avec OK).
+    val pages = tabs + R.string.search_page
+    val rail = pages.zip(listOf(R.drawable.ic_ready, R.drawable.ic_movie, R.drawable.ic_series, R.drawable.ic_search))
         .map { (label, icon) -> RailItem(stringResource(label), icon) } +
         RailItem(stringResource(R.string.settings_button), R.drawable.ic_settings, page = false)
     Row(Modifier.fillMaxSize()) {
     NavRail(rail, selected = state.tab, selectedFocus = tabFocus,
-            onSelect = { index -> if (index < tabs.size) state.selectTab(index) else onSettings() }) {
+            onSelect = { index -> if (index < pages.size) state.selectTab(index) else onSettings() }) {
         Image(painterResource(R.mipmap.ic_launcher), contentDescription = null,
               modifier = Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)))
     }
     Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 40.dp, vertical = 27.dp)) {
+        Text(stringResource(pages[state.tab]), style = MaterialTheme.typography.headlineSmall,
+             modifier = Modifier.padding(bottom = 10.dp))
+        if (state.tab == TAB_SEARCH) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             TvTextField(
                 value = state.query, onValueChange = { state.query = it },
@@ -240,8 +263,21 @@ fun HomeScreen(
             )
             Button(onClick = state::search) { Text(stringResource(R.string.search_button)) }
         }
+        if (state.catalog == true) {
+            Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.search_in), color = Color(0xFF9CA3AF))
+                FilterChip(selected = state.searchKind == 1, onClick = { state.selectSearchKind(1) }) {
+                    Text(stringResource(R.string.tab_films))
+                }
+                FilterChip(selected = state.searchKind == 2, onClick = { state.selectSearchKind(2) }) {
+                    Text(stringResource(R.string.tab_series))
+                }
+            }
+        }
+        }
 
-        if (state.recent.isNotEmpty()) {
+        if (state.tab == TAB_SEARCH && state.recent.isNotEmpty()) {
             Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(stringResource(R.string.recent_searches), color = Color(0xFF9CA3AF))
@@ -252,6 +288,10 @@ fun HomeScreen(
         }
 
         val grid = state.grid()
+        if (state.tab == TAB_SEARCH && state.query.isBlank() && (grid?.items?.isEmpty() ?: state.items.isEmpty())) {
+            Text(stringResource(R.string.search_start), color = Color(0xFF9CA3AF), modifier = Modifier.padding(top = 16.dp))
+            return@Column
+        }
         if (grid != null) {
             PosterGrid(grid, state.preparing, onOpenPoster)
             return@Column

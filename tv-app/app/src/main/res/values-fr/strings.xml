@@ -84,4 +84,7 @@
     <string name="source_switching">Changement de source…</string>
     <string name="source_secret_note">L\'identifiant et le mot de passe partent vers le Mac par le Wi-Fi de la maison et restent sur le Mac.</string>
     <string name="source_fill_all">Il faut remplir les quatre cases.</string>
+    <string name="search_page">Rechercher</string>
+    <string name="search_in">Chercher dans :</string>
+    <string name="search_start">Tape un titre, puis « Chercher ».</string>
 </resources>

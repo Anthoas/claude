@@ -85,4 +85,7 @@
     <string name="source_switching">Mengganti sumber…</string>
     <string name="source_secret_note">Nama pengguna dan kata sandi dikirim ke Mac lewat Wi-Fi rumah dan disimpan di Mac.</string>
     <string name="source_fill_all">Keempat kolom harus diisi.</string>
+    <string name="search_page">Cari</string>
+    <string name="search_in">Cari di:</string>
+    <string name="search_start">Ketik judul, lalu « Cari ».</string>
 </resources>
