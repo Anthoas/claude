@@ -66,6 +66,10 @@ const val TAB_FAVORITES = 0
 const val TAB_SEARCH = 1
 const val TAB_SETTINGS = 2
 
+private const val WEEK_MS = 7 * 24 * 3600 * 1000L
+private const val SPLASH_MS = 1_500L
+private const val ERROR_MS = 4_000L
+
 /** Tout l'état de l'application : liste des chaînes, favoris, chargement. */
 class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
     val channels = mutableStateListOf<Channel>()
@@ -132,11 +136,29 @@ class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
         prefs.favorites.save(favorites.toList(), removedLast = i >= 0 && favorites.isEmpty())
     }
 
+    /** Écran d'accueil (sanglier) affiché au démarrage, pendant les mises à jour. */
+    var starting by mutableStateOf(true)
+    var loadingPrograms by mutableStateOf(false)
+
+    /**
+     * Démarrage, pendant l'écran d'accueil : la liste des chaînes est rechargée si elle a plus
+     * d'une semaine (ou s'il n'y en a pas encore ; environ 2 min), puis le programme des favoris
+     * est mis à jour (quelques secondes).
+     */
     suspend fun start() {
+        val began = System.currentTimeMillis()
         channels.addAll(store.cached())
         repairFavorites()
-        if (channels.isEmpty() && playlistUrl.isNotBlank()) refresh()
         if (playlistUrl.isBlank()) tab = TAB_SETTINGS
+        else if (channels.isEmpty() || System.currentTimeMillis() - store.savedAt > WEEK_MS) refresh()
+        if (favorites.isNotEmpty()) {
+            loadingPrograms = true
+            try { loadPrograms(favorites.toList()) } finally { loadingPrograms = false }
+        }
+        val shown = System.currentTimeMillis() - began
+        if (error != null) delay(ERROR_MS) // le temps de lire le message ; on continue avec l'ancienne liste
+        else if (shown < SPLASH_MS) delay(SPLASH_MS - shown)
+        starting = false
     }
 
     suspend fun refresh(newUrl: String? = null) {
@@ -192,7 +214,9 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
             ),
         ) {
             val channel = playing
-            if (channel != null) {
+            if (state.starting) {
+                SplashScreen(state)
+            } else if (channel != null) {
                 // Chaîne favorite : haut / bas passent à la précédente / suivante (en boucle).
                 val index = state.favorites.indexOfFirst { it.url == channel.url }
                 val zap: ((Int) -> Unit)? = if (index < 0 || state.favorites.size < 2) null else { step ->
@@ -283,6 +307,36 @@ private fun Home(state: GegeState, onPlay: (Channel) -> Unit, onRefresh: (String
             TAB_FAVORITES -> FavoritesScreen(state, onPlay, channelFocus)
             TAB_SEARCH -> SearchScreen(state, onPlay)
             else -> SettingsScreen(state, onRefresh)
+        }
+    }
+}
+
+/** Écran d'accueil : la tête de sanglier, « GégéTV », et l'avancement de la mise à jour s'il y en a une. */
+@Composable
+private fun SplashScreen(state: GegeState) {
+    Column(
+        Modifier.fillMaxSize().padding(48.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Image(painterResource(R.drawable.sanglier), contentDescription = null, modifier = Modifier.size(260.dp))
+        Spacer(Modifier.height(24.dp))
+        Text("GégéTV", style = MaterialTheme.typography.displayMedium)
+        Spacer(Modifier.height(32.dp))
+        Column(Modifier.width(560.dp).height(90.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            val error = state.error
+            when {
+                error != null -> {
+                    Text("Mise à jour impossible ($error).", color = Color(0xFFFCA5A5))
+                    Text("La liste déjà enregistrée sur la télé est utilisée.", color = Color(0xFFD1D5DB))
+                }
+                state.loading -> {
+                    Text(if (state.progress >= 0) "Mise à jour de la liste des chaînes… ${(state.progress * 100).toInt()} %"
+                         else "Mise à jour de la liste des chaînes…", color = Color(0xFFD1D5DB))
+                    ProgressBar(state.progress.takeIf { it >= 0 }?.toDouble(), Modifier.padding(top = 12.dp))
+                }
+                state.loadingPrograms -> Text("Mise à jour des programmes…", color = Color(0xFFD1D5DB))
+            }
         }
     }
 }

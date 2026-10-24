@@ -3,6 +3,11 @@
 Application Android TV pour regarder les **chaînes en direct** d'une playlist IPTV, sans
 traduction et sans Mac : elle lit elle-même la playlist M3U.
 
+- **Écran d'accueil** au démarrage (tête de sanglier, « GégéTV ») : la liste des chaînes y est
+  rechargée si elle a plus d'une semaine (environ 2 min sur la Philips, barre d'attente), puis le
+  programme des favoris est mis à jour (quelques secondes) ; sans réseau, l'ancienne liste sert.
+  Ensuite les favoris s'ouvrent, sélecteur sur la première chaîne. Fond vert sombre dès
+  l'ouverture (`Theme.GegeTV`), pour éviter un écran gris.
 - **Sélecteur : un liseré rouge** (`SELECT_RED`) autour de l'élément choisi, qui garde ses couleurs (ni fond rouge ni fond clair). À l'ouverture,
   il est sur la première chaîne des favoris ; en quittant une chaîne, il revient sur celle-ci ; en
   montant vers les onglets, il arrive sur l'onglet affiché (pas sur celui du dessus).

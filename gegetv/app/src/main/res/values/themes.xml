@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fond vert sombre dès l'ouverture (sinon un écran gris s'affiche avant l'écran d'accueil). -->
+    <style name="Theme.GegeTV" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/gege_background</item>
+    </style>
+    <color name="gege_background">#16201A</color>
+</resources>
