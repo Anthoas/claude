@@ -3,6 +3,9 @@
 Application Android TV pour regarder les **chaînes en direct** d'une playlist IPTV, sans
 traduction et sans Mac : elle lit elle-même la playlist M3U.
 
+- **Menu de gauche** (style ZenIPTV) : tête de sanglier, puis Favoris (étoile), Rechercher (loupe),
+  Réglages (engrenage) ; petite icône et son nom, page affichée sur fond arrondi, passer sur un
+  bouton ouvre sa page. Noms de chaînes affichés sans le préfixe de pays (« |FR| »).
 - **Écran d'accueil** au démarrage (tête de sanglier, « GégéTV ») : la liste des chaînes y est
   rechargée si elle a plus d'une semaine (environ 2 min sur la Philips, barre d'attente), puis le
   programme des favoris est mis à jour (quelques secondes) ; sans réseau, l'ancienne liste sert.

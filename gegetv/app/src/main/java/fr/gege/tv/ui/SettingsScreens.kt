@@ -47,6 +47,7 @@ private const val PAGE_CHANNELS = 1
 fun SettingsScreen(state: GegeState) {
     var page by remember { mutableIntStateOf(PAGE_SOURCES) }
     var adding by remember { mutableStateOf(state.sources.isEmpty()) }
+    var backFromForm by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(top = 4.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             PageButton("Sources", page == PAGE_SOURCES) { page = PAGE_SOURCES }
@@ -54,8 +55,8 @@ fun SettingsScreen(state: GegeState) {
         }
         when {
             page == PAGE_CHANNELS -> ChannelsPage(state)
-            adding -> AddSourceForm(state, onDone = { adding = false })
-            else -> SourcesPage(state, onAdd = { adding = true })
+            adding -> AddSourceForm(state, onDone = { adding = false; backFromForm = true })
+            else -> SourcesPage(state, focusActive = backFromForm, onAdd = { adding = true })
         }
     }
 }
@@ -70,9 +71,10 @@ private fun PageButton(label: String, shown: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun SourcesPage(state: GegeState, onAdd: () -> Unit) {
+private fun SourcesPage(state: GegeState, focusActive: Boolean, onAdd: () -> Unit) {
     val activeRow = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { activeRow.requestFocus() } } // sélecteur sur la source utilisée
+    // Au retour du formulaire, sélecteur sur la source utilisée (pas en passant dans le menu de gauche).
+    LaunchedEffect(Unit) { if (focusActive) runCatching { activeRow.requestFocus() } }
     var chosen by remember { mutableStateOf<Source?>(null) } // source dont on choisit quoi faire
     var deleting by remember { mutableStateOf<Source?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

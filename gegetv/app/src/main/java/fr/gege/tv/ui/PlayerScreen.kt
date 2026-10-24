@@ -199,7 +199,7 @@ fun PlayerScreen(
             ) {
                 ChannelLogo(channel, Modifier.width(120.dp).aspectRatio(16f / 9f))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(channel.name, style = MaterialTheme.typography.headlineSmall, maxLines = 1,
+                    Text(channel.shortName, style = MaterialTheme.typography.headlineSmall, maxLines = 1,
                          overflow = TextOverflow.Ellipsis)
                     val current = programs.firstOrNull()?.takeIf { it.start <= System.currentTimeMillis() }
                     if (current == null) {

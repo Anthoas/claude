@@ -11,6 +11,9 @@ import java.text.Normalizer
 
 /** Une chaîne en direct de la playlist. */
 data class Channel(val name: String, val group: String, val logo: String, val url: String) {
+    /** Nom affiché, sans le préfixe de pays de la playlist (« |FR| TF1 FHD » → « TF1 FHD »). */
+    val shortName: String by lazy { name.replace(Regex("""^\|?\s*[A-Z]{2}\s*\|\s*"""), "").ifBlank { name } }
+
     /** Nom et catégorie sans accents ni majuscules, pour la recherche. */
     val haystack: String by lazy { normalize("$name $group") }
 

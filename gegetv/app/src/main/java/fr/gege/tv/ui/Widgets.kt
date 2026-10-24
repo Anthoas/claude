@@ -26,6 +26,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.res.painterResource
+import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Icon
+import androidx.tv.material3.Surface
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextAlign
@@ -185,4 +195,59 @@ fun ConfirmDialog(question: String, onYes: () -> Unit, onNo: () -> Unit) {
         }
     }
     LaunchedEffect(Unit) { runCatching { no.requestFocus() } }
+}
+
+/** Un bouton du menu de gauche : une petite icône et son nom. */
+data class RailItem(val label: String, val icon: Int)
+
+private val RAIL_BG = Color(0xFF0F1712)
+private val RAIL_SELECTED = Color(0xFF2B3830)
+
+/**
+ * Menu de gauche (comme ZenIPTV) : une colonne étroite, de petites icônes ; la page affichée a un
+ * fond arrondi, l'élément choisi à la télécommande le liseré rouge. Passer sur un bouton ouvre sa
+ * page. En arrivant dans le menu, le sélecteur va sur la page affichée (`selectedFocus`).
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun NavRail(
+    items: List<RailItem>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    selectedFocus: FocusRequester,
+    top: @Composable () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxHeight().width(112.dp).background(RAIL_BG).padding(vertical = 28.dp)
+            .focusProperties { enter = { selectedFocus } },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        top()
+        Spacer(Modifier.height(18.dp))
+        items.forEachIndexed { index, item ->
+            val shape = RoundedCornerShape(16.dp)
+            Surface(
+                onClick = { onSelect(index) },
+                shape = ClickableSurfaceDefaults.shape(shape),
+                colors = ClickableSurfaceDefaults.colors(
+                    containerColor = if (index == selected) RAIL_SELECTED else Color.Transparent,
+                    focusedContainerColor = if (index == selected) RAIL_SELECTED else Color.Transparent,
+                    pressedContainerColor = RAIL_SELECTED,
+                    contentColor = if (index == selected) Color.White else Color(0xFF9CA3AF),
+                    focusedContentColor = Color.White, pressedContentColor = Color.White,
+                ),
+                border = ClickableSurfaceDefaults.border(focusedBorder = selectedBorder(shape), pressedBorder = selectedBorder(shape)),
+                modifier = Modifier.width(84.dp).height(76.dp)
+                    .then(if (index == selected) Modifier.focusRequester(selectedFocus) else Modifier)
+                    .onFocusChanged { if (it.isFocused && index != selected) onSelect(index) },
+            ) {
+                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
+                       verticalArrangement = Arrangement.Center) {
+                    Icon(painterResource(item.icon), contentDescription = item.label, modifier = Modifier.size(30.dp))
+                    Text(item.label, fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+    }
 }

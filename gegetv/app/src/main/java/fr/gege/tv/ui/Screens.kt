@@ -108,7 +108,7 @@ fun FavoritesScreen(state: GegeState, onPlay: (Channel) -> Unit, startFocus: Foc
                 ) {
                     ChannelLogo(channel, Modifier.fillMaxSize())
                 }
-                Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                Text(channel.shortName, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                      modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 if (state.isUnavailable(channel)) {
                     Text("Indisponible", color = Color(0xFFFCA5A5), maxLines = 1,
@@ -168,7 +168,7 @@ fun SearchScreen(state: GegeState, onPlay: (Channel) -> Unit) {
                     border = ListItemDefaults.border(focusedBorder = selectedBorder(RoundedCornerShape(8.dp)),
                                                      pressedBorder = selectedBorder(RoundedCornerShape(8.dp))),
                     leadingContent = { ChannelLogo(channel, Modifier.width(96.dp).aspectRatio(16f / 9f)) },
-                    headlineContent = { Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    headlineContent = { Text(channel.shortName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     supportingContent = { Text(channel.group, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     trailingContent = {
                         if (state.isFavorite(channel)) Text("★", color = MaterialTheme.colorScheme.primary,

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,13 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.painterResource
@@ -41,10 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
-import androidx.tv.material3.Tab
-import androidx.tv.material3.TabDefaults
-import androidx.tv.material3.TabRow
-import androidx.tv.material3.TabRowDefaults
 import androidx.tv.material3.Text
 import androidx.tv.material3.darkColorScheme
 import androidx.compose.foundation.Image
@@ -315,8 +306,8 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
                 state.asking?.let { asked ->
                     val remove = state.isFavorite(asked)
                     ConfirmDialog(
-                        question = if (remove) "Voulez-vous retirer « ${asked.name} » des favoris ?"
-                                   else "Voulez-vous ajouter « ${asked.name} » à la liste des favoris ?",
+                        question = if (remove) "Voulez-vous retirer « ${asked.shortName} » des favoris ?"
+                                   else "Voulez-vous ajouter « ${asked.shortName} » à la liste des favoris ?",
                         onYes = {
                             state.toggleFavorite(asked)
                             state.asking = null
@@ -331,58 +322,39 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun Home(state: GegeState, onPlay: (Channel) -> Unit) {
-    val tabFocus = remember { FocusRequester() }
+    val railFocus = remember { FocusRequester() }
     val channelFocus = remember { FocusRequester() }
-    var focusedTab by remember { mutableIntStateOf(-1) } // onglet entouré du liseré rouge
-    // Sélecteur de départ : sur une chaîne des favoris s'il y en a, sinon sur l'onglet.
+    // Sélecteur de départ : sur une chaîne des favoris s'il y en a, sinon dans le menu de gauche.
     LaunchedEffect(Unit) {
         val onChannel = state.tab == TAB_FAVORITES && state.favorites.isNotEmpty() &&
             runCatching { channelFocus.requestFocus() }.isSuccess
-        if (!onChannel) runCatching { tabFocus.requestFocus() }
+        if (!onChannel) runCatching { railFocus.requestFocus() }
     }
-    Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 24.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            Image(painterResource(R.mipmap.ic_launcher), contentDescription = null, modifier = Modifier.size(52.dp))
-            Text("GégéTV", style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.width(12.dp))
-            TabRow(
-                selectedTabIndex = state.tab,
-                // En arrivant sur les onglets (par exemple en montant depuis une chaîne), le
-                // sélecteur va sur l'onglet affiché, pas sur celui qui se trouve juste au-dessus.
-                modifier = Modifier.focusProperties { enter = { tabFocus } },
-                indicator = { positions, rowFocused ->
-                    positions.getOrNull(state.tab)?.let {
-                        TabRowDefaults.PillIndicator(currentTabPosition = it, doesTabRowHaveFocus = rowFocused,
-                                                     activeColor = Color(0xFF2B3830), inactiveColor = Color(0xFF2B3830))
-                    }
-                },
-            ) {
-                listOf("★ Favoris", "Rechercher", "Réglages").forEachIndexed { index, label ->
-                    Tab(
-                        selected = index == state.tab,
-                        onFocus = { state.tab = index },
-                        colors = TabDefaults.pillIndicatorTabColors(focusedContentColor = Color.White,
-                                                                    selectedContentColor = Color.White),
-                        modifier = (if (index == state.tab) Modifier.focusRequester(tabFocus) else Modifier)
-                            .onFocusChanged { focusedTab = if (it.isFocused) index else if (focusedTab == index) -1 else focusedTab }
-                            .then(if (focusedTab == index) Modifier.border(3.dp, SELECT_RED, CircleShape) else Modifier),
-                    ) { Text(label, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) }
-                }
+    val pages = listOf(
+        RailItem("Favoris", R.drawable.ic_star),
+        RailItem("Rechercher", R.drawable.ic_search),
+        RailItem("Réglages", R.drawable.ic_settings),
+    )
+    Row(Modifier.fillMaxSize()) {
+        NavRail(pages, selected = state.tab, onSelect = { state.tab = it }, selectedFocus = railFocus) {
+            Image(painterResource(R.mipmap.ic_launcher), contentDescription = "GégéTV", modifier = Modifier.size(56.dp))
+        }
+        Column(Modifier.weight(1f).fillMaxHeight().padding(start = 40.dp, end = 40.dp, top = 28.dp)) {
+            Text(listOf("Mes chaînes favorites", "Rechercher une chaîne", "Réglages")[state.tab],
+                 style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(12.dp))
+            if (state.loading) {
+                Text(if (state.progress >= 0) "Chargement des chaînes… ${(state.progress * 100).toInt()} %"
+                     else "Chargement des chaînes…", color = Color(0xFFD1D5DB))
+                ProgressBar(state.progress.takeIf { it >= 0 }?.toDouble(), Modifier.padding(vertical = 8.dp))
             }
-        }
-        Spacer(Modifier.height(16.dp))
-        if (state.loading) {
-            Text(if (state.progress >= 0) "Chargement des chaînes… ${(state.progress * 100).toInt()} %"
-                 else "Chargement des chaînes…", color = Color(0xFFD1D5DB))
-            ProgressBar(state.progress.takeIf { it >= 0 }?.toDouble(), Modifier.padding(vertical = 8.dp))
-        }
-        when (state.tab) {
-            TAB_FAVORITES -> FavoritesScreen(state, onPlay, channelFocus)
-            TAB_SEARCH -> SearchScreen(state, onPlay)
-            else -> SettingsScreen(state)
+            when (state.tab) {
+                TAB_FAVORITES -> FavoritesScreen(state, onPlay, channelFocus)
+                TAB_SEARCH -> SearchScreen(state, onPlay)
+                else -> SettingsScreen(state)
+            }
         }
     }
 }
