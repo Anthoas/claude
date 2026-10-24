@@ -85,6 +85,11 @@ fun FavoritesScreen(state: GegeState, onPlay: (Channel) -> Unit) {
                 }
                 Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                      modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                if (state.isUnavailable(channel)) {
+                    Text("Indisponible", color = Color(0xFFFCA5A5), maxLines = 1,
+                         overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                         style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
+                }
                 // L'émission en cours, avec une petite barre qui montre où elle en est.
                 state.programsOf(channel).firstOrNull()?.takeIf { it.start <= state.now }?.let { current ->
                     Text(current.title, color = GRAY, maxLines = 1, overflow = TextOverflow.Ellipsis,

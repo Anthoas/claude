@@ -20,6 +20,15 @@ traduction et sans Mac : elle lit elle-même la playlist M3U.
   vidéo : le père avait peur de retirer un favori par erreur. Vidéo dans une `TextureView`
   (`res/layout/player_view.xml`) : en `SurfaceView`, la Philips (MediaTek) n'affichait que le son.
 
+Favoris protégés contre les pertes (`Favorites.kt`, dossier `files/favoris/` de l'appli) :
+enregistrés tout de suite (fichier écrit à côté, `fsync`, puis mis à la place de l'ancien) ; les 5
+versions précédentes sont gardées (`favoris-1.json` … `favoris-5.json`) et la plus récente version
+saine est reprise si le fichier est illisible ; une liste vide ne remplace jamais une liste pleine
+(sauf retrait du dernier favori). Après chargement de la playlist, un favori dont l'adresse a changé
+est retrouvé par son nom et mis à jour ; introuvable, il reste affiché « Indisponible », jamais
+effacé. Les favoris des premières versions (préférences) sont repris une fois. Testé sur la Philips
+(fichier abîmé, adresse changée, chaîne disparue).
+
 Programme (`Epg.kt`) : demandé au serveur Xtream Codes de la playlist (`player_api.php`,
 `get_short_epg`, avec le compte et le numéro tirés de l'adresse de la chaîne), une chaîne à la fois,
 seulement pour la chaîne ouverte et les favoris (le guide complet `xmltv.php` pèse ~40 Mo). Heures

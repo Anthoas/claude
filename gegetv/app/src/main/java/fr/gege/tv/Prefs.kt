@@ -11,17 +11,15 @@ class Prefs(context: Context) {
         get() = prefs.getString("playlist", "") ?: ""
         set(value) = prefs.edit().putString("playlist", value.trim()).apply()
 
-    /** Favoris dans l'ordre où ils ont été ajoutés (une copie de la chaîne : nom, logo, adresse). */
-    var favorites: List<Channel>
+    /** Favoris (une copie de chaque chaîne : nom, logo, adresse), gardés à l'abri des pertes. */
+    val favorites = Favorites(context)
+
+    /** Favoris des premières versions (rangés ici) : repris une fois par `Favorites`, puis laissés tels quels. */
+    val legacyFavorites: List<Channel>
         get() = try {
             val array = JSONArray(prefs.getString("favorites", "[]"))
             (0 until array.length()).map { Channel.fromJson(array.getJSONObject(it)) }
         } catch (e: Exception) {
             emptyList()
-        }
-        set(value) {
-            val array = JSONArray()
-            value.forEach { array.put(it.toJson()) }
-            prefs.edit().putString("favorites", array.toString()).apply()
         }
 }

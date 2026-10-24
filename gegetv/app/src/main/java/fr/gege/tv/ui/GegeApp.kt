@@ -43,6 +43,7 @@ import fr.gege.tv.Channel
 import fr.gege.tv.ChannelStore
 import fr.gege.tv.Guide
 import fr.gege.tv.Program
+import fr.gege.tv.normalize
 import fr.gege.tv.Prefs
 import fr.gege.tv.R
 import kotlinx.coroutines.async
@@ -58,7 +59,7 @@ const val TAB_SETTINGS = 2
 /** Tout l'état de l'application : liste des chaînes, favoris, chargement. */
 class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
     val channels = mutableStateListOf<Channel>()
-    val favorites = mutableStateListOf<Channel>().apply { addAll(prefs.favorites) }
+    val favorites = mutableStateListOf<Channel>().apply { addAll(prefs.favorites.load { prefs.legacyFavorites }) }
     var loading by mutableStateOf(false)
     var progress by mutableFloatStateOf(-1f)
     var error by mutableStateOf<String?>(null)
@@ -85,14 +86,42 @@ class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
 
     fun isFavorite(channel: Channel) = favorites.any { it.url == channel.url }
 
+    /** Adresses des chaînes de la liste chargée, pour repérer les favoris devenus introuvables. */
+    private var known by mutableStateOf(emptySet<String>())
+
+    /** Favori absent de la liste chargée (le fournisseur l'a retiré) : affiché, jamais effacé. */
+    fun isUnavailable(channel: Channel) = known.isNotEmpty() && channel.url !in known
+
+    /**
+     * Après chargement de la liste : un favori dont l'adresse a changé (le fournisseur a renuméroté
+     * ses chaînes) est retrouvé par son nom et mis à jour. Rien n'est jamais supprimé.
+     */
+    private fun repairFavorites() {
+        known = channels.mapTo(HashSet()) { it.url }
+        if (known.isEmpty()) return
+        val byName = HashMap<String, Channel>()
+        channels.forEach { byName.putIfAbsent(normalize(it.name).trim(), it) }
+        var changed = false
+        favorites.toList().forEachIndexed { i, fav ->
+            if (fav.url in known) return@forEachIndexed
+            val found = byName[normalize(fav.name).trim()] ?: return@forEachIndexed
+            if (favorites.none { it.url == found.url }) { // pas de doublon si elle est déjà en favori
+                favorites[i] = found
+                changed = true
+            }
+        }
+        if (changed) prefs.favorites.save(favorites.toList())
+    }
+
     fun toggleFavorite(channel: Channel) {
         val i = favorites.indexOfFirst { it.url == channel.url }
         if (i >= 0) favorites.removeAt(i) else favorites.add(channel)
-        prefs.favorites = favorites.toList()
+        prefs.favorites.save(favorites.toList(), removedLast = i >= 0 && favorites.isEmpty())
     }
 
     suspend fun start() {
         channels.addAll(store.cached())
+        repairFavorites()
         if (channels.isEmpty() && playlistUrl.isNotBlank()) refresh()
         if (playlistUrl.isBlank()) tab = TAB_SETTINGS
     }
@@ -108,6 +137,7 @@ class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
             val fresh = store.refresh(playlistUrl) { progress = it }
             channels.clear()
             channels.addAll(fresh)
+            repairFavorites()
             savedAt = store.savedAt
         } catch (e: Exception) {
             error = e.message ?: e.javaClass.simpleName
