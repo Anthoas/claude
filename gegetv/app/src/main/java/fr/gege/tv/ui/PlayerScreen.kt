@@ -104,16 +104,17 @@ fun PlayerScreen(channel: Channel, isFavorite: Boolean, onToggleFavorite: () -> 
         }
     }
 
-    // Le bandeau se cache 6 s après la dernière action (sauf en cas d'erreur).
+    // Sélection : sur le bouton favori quand le bandeau apparaît, sur l'image quand il disparaît.
+    // (Seulement à ces moments-là : la déplacer à chaque touche empêchait d'atteindre « Retour »
+    // et annulait la touche Retour de la télécommande.)
+    LaunchedEffect(overlay) {
+        runCatching { if (overlay) favoriteButton.requestFocus() else root.requestFocus() }
+    }
+    // Le bandeau se cache 6 s après la dernière touche (sauf en cas d'erreur).
     LaunchedEffect(overlay, touched, error) {
-        if (overlay) {
-            runCatching { favoriteButton.requestFocus() }
-            if (error == null) {
-                delay(OVERLAY_MS)
-                overlay = false
-            }
-        } else {
-            runCatching { root.requestFocus() }
+        if (overlay && error == null) {
+            delay(OVERLAY_MS)
+            overlay = false
         }
     }
 
@@ -124,6 +125,12 @@ fun PlayerScreen(channel: Channel, isFavorite: Boolean, onToggleFavorite: () -> 
             .focusRequester(root)
             .focusable()
             .onPreviewKeyEvent { event ->
+                // Retour quitte la chaîne au premier appui, quel que soit le bouton sélectionné
+                // (sans cela, le premier appui servait seulement à « désélectionner » le bouton).
+                if (event.key == Key.Back) {
+                    if (event.type == KeyEventType.KeyUp) onExit()
+                    return@onPreviewKeyEvent true
+                }
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 touched++
                 // Bandeau caché : OK ou les flèches le font réapparaître.
