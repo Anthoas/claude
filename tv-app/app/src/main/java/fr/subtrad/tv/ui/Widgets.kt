@@ -152,13 +152,13 @@ fun NavRail(
     top: @Composable () -> Unit,
 ) {
     Column(
-        Modifier.fillMaxHeight().width(116.dp).background(Color(0xFF0B1120)).padding(vertical = 26.dp)
+        Modifier.fillMaxHeight().width(116.dp).background(Color(0xFF0B1120)).padding(vertical = 18.dp)
             .focusProperties { enter = { selectedFocus } },
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         top()
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(8.dp))
         items.forEachIndexed { index, item ->
             val shape = RoundedCornerShape(16.dp)
             Surface(
@@ -170,15 +170,15 @@ fun NavRail(
                     focusedContainerColor = Color(0xFFE5E7EB), focusedContentColor = Color(0xFF111827),
                     pressedContainerColor = Color(0xFFE5E7EB), pressedContentColor = Color(0xFF111827),
                 ),
-                modifier = Modifier.width(92.dp).height(84.dp)
+                modifier = Modifier.width(92.dp).height(74.dp)
                     .then(if (index == selected) Modifier.focusRequester(selectedFocus) else Modifier)
                     .onFocusChanged { if (it.isFocused && item.page && index != selected) onSelect(index) },
             ) {
                 Column(Modifier.fillMaxSize().padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally,
                        verticalArrangement = Arrangement.Center) {
-                    Icon(painterResource(item.icon), contentDescription = item.label, modifier = Modifier.size(30.dp))
+                    Icon(painterResource(item.icon), contentDescription = item.label, modifier = Modifier.size(26.dp))
                     Text(item.label, fontSize = 11.sp, maxLines = 2, lineHeight = 13.sp,
-                         textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+                         textAlign = TextAlign.Center, modifier = Modifier.padding(top = 3.dp))
                 }
             }
         }

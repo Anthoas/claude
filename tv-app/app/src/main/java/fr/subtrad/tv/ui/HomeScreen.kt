@@ -248,7 +248,7 @@ fun HomeScreen(
     NavRail(rail, selected = state.tab, selectedFocus = tabFocus,
             onSelect = { index -> if (index < pages.size) state.selectTab(index) else onSettings() }) {
         Image(painterResource(R.mipmap.ic_launcher), contentDescription = null,
-              modifier = Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)))
+              modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)))
     }
     Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 40.dp, vertical = 27.dp)) {
         Text(stringResource(pages[state.tab]), style = MaterialTheme.typography.headlineSmall,
