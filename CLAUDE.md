@@ -80,9 +80,12 @@ l'utilisateur (octobre 2026) : chargement (~2 min la première fois), recherche,
 décodeur vidéo HEVC démarrés, image de TF1 vue sur une capture (la capture la montre parfois
 noire : couche vidéo matérielle), programme de TF1 affiché (octobre 2026). Deuxième télé de l'utilisateur pour les essais : **Philips 2021/22 UHD Android TV**
 (Android 11, SDK 30, `armeabi-v7a`, puce MediaTek `mt5895`), `192.168.1.29:5555`, autorisée en
-octobre 2026. Sur cette Philips, la vidéo en `SurfaceView` restait cachée derrière l'appli (son sans
-image) : le lecteur utilise une `TextureView` (`res/layout/player_view.xml`), vérifié sur les deux
-télés. Son clavier à l'écran garde les flèches : Retour le ferme. Télé du père : adresse adb et lien
+octobre 2026. Sur cette Philips, la vidéo en `SurfaceView` (affichée *derrière* l'appli) restait cachée
+par le fond de la fenêtre (son sans image). GégéTV utilise une `TextureView` (directs SDR, vérifié
+sur les deux télés). **Subtrad TV garde la `SurfaceView`** (une `TextureView` rend le HDR sombre et
+terne) avec une fenêtre sans fond et un écran de lecture transparent : image normale et sous-titres
+indonésiens confirmés à l'œil sur la Philips (octobre 2026). Les captures d'écran de la Philips
+montrent la vidéo HDR en couleurs fausses (vert/blanc) : ne pas s'y fier. Son clavier à l'écran garde les flèches : Retour le ferme. Télé du père : adresse adb et lien
 de playlist à demander.
 
 ## Règles de travail

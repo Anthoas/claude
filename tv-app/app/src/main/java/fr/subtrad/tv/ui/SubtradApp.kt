@@ -48,7 +48,12 @@ fun SubtradApp(prefs: Prefs) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             shape = RectangleShape,
-            colors = SurfaceDefaults.colors(containerColor = Color(0xFF111827), contentColor = Color.White),
+            // Pendant la lecture, fond transparent : la vidéo (SurfaceView) est affichée derrière
+            // l'application ; sur les télés Philips (MediaTek), un fond opaque la cachait.
+            colors = SurfaceDefaults.colors(
+                containerColor = if (stack.last() is Screen.Player) Color.Transparent else Color(0xFF111827),
+                contentColor = Color.White,
+            ),
         ) {
             when (val screen = stack.last()) {
                 Screen.Setup -> SetupScreen(prefs) { connected ->
