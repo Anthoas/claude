@@ -37,6 +37,7 @@ _LANG_RE = re.compile(r"^\W*([A-Z]{2,3})\W")  # « |FR| Titre », « FR| Titre �
 _PREFIX_RE = re.compile(r"^(?:\s*\|?[A-Z]{2,3}(?:\s[^|\n]{0,12})?\|\s*)+")  # « |FR| », « |FR DV⁴ᴷ| »
 _YEAR_RE = re.compile(r"\b((?:19|20)\d\d)\b")
 _PATH_RE = re.compile(r"/(series|movie)/[^/]+/[^/]+/(\d+)\.(\w+)$")
+_EPISODE_MARK = re.compile(r"\s*\bS\d{1,3}\s*E\d{1,4}\s*$", re.IGNORECASE)  # « … S06 E06 »
 
 
 def default_catalog_dir() -> Path:
@@ -413,6 +414,26 @@ class Catalog:
             "rating": rating_text(about.get("rating") or summary.get("rating")),
             "seasons": seasons, "next": next_episode(seasons),
         }
+
+    def episode_of(self, video_id: int, name: str, status: Status | None = None) -> dict | None:
+        """Ce que l'onglet Séries montre pour cet épisode de la playlist (image, titres, résumé…),
+        avec sa série et sa saison ; None si la série n'est pas retrouvée dans le catalogue.
+        La série est retrouvée par le nom de l'épisode sans « S06 E06 »."""
+        series_name = _EPISODE_MARK.sub("", name).strip()
+        if not series_name or series_name == name.strip():
+            return None
+        series = self._ensure()["series"]
+        found = [x for x in series if (x.get("name") or "").strip() == series_name] or \
+                [x for x in series if _norm(x.get("name") or "").strip() == _norm(series_name).strip()]
+        for summary in found:
+            detail = self.series_detail(int(summary.get("series_id")), status)
+            for season in detail["seasons"]:
+                for e in season["episodes"]:
+                    if e["id"] == video_id:
+                        return {"series_id": detail["series_id"], "series_name": detail["name"],
+                                "season": season["season"], "season_name": season["name"],
+                                "titles_pending": detail["titles_pending"], "episode": e}
+        return None
 
     def _complete_with_tmdb(self, seasons: list[dict], tmdb_ids: list[int], name: str, year: str) -> None:
         """Titres, résumés et images d'épisodes que le fournisseur ne donne pas (si clé TMDB)."""

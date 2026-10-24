@@ -391,3 +391,16 @@ def test_mac_page_has_the_catalog_prepare_and_french_playback(tmp_path):
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+def test_ready_episode_finds_its_series_sheet(tmp_path):
+    catalog, _ = make_catalog(tmp_path)
+    found = catalog.episode_of(1, "|FR| Game of Thrones 2011 4K MULTI S01 E02")
+    assert (found["series_id"], found["series_name"], found["season"]) == (77, "Game of Thrones 2011 4K MULTI", 1)
+    assert found["episode"]["id"] == 1 and found["episode"]["episode"] == 2
+    assert found["episode"]["air_date"] == "2011-04-24" and found["season_name"] == "Saison 1"
+    assert catalog.episode_of(2, "|FR| Game of Thrones 2011 4K MULTI S02 E01")["season"] == 2
+    assert catalog.episode_of(3, "|FR| Le Dîner de cons (1998)") is None  # pas un épisode
+    assert catalog.episode_of(1, "|FR| Série inconnue S01 E02") is None
+    secrets = json.dumps(found)
+    assert "MONMDP" not in secrets and "stream.example" not in secrets

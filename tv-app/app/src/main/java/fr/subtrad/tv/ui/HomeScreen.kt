@@ -287,8 +287,19 @@ fun HomeScreen(
                         state.lastOpened = index
                         onOpen(item)
                     },
-                    headlineContent = { Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    supportingContent = { Text(item.group, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    // Épisode retrouvé dans le catalogue : comme dans l'onglet Séries (image, titres).
+                    leadingContent = item.series?.let { s -> { EpisodeThumb(s.episode) } },
+                    headlineContent = {
+                        val s = item.series
+                        Text(if (s != null) episodeTitle(s.episode) else item.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
+                    supportingContent = {
+                        val s = item.series
+                        val text = if (s == null) item.group
+                                   else listOf(s.seriesName, seasonLabel(s.season, s.seasonName), s.episode.duration,
+                                               s.episode.airDate).filter { it.isNotBlank() }.joinToString(" · ")
+                        Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
                     trailingContent = {
                         val job = state.preparing[item.id]
                         when {

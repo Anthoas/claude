@@ -50,6 +50,9 @@ est un **lecteur** piloté à la télécommande (Kotlin, Compose for TV, Media3/
 Piloter la télé par adb (`input keyevent`) : **vérifier d'abord que Subtrad TV est au premier
 plan** (`dumpsys activity activities | grep mResumedActivity`). La famille utilise la télé (appli
 ZenIPTV) : une touche envoyée à l'aveugle est arrivée une fois dans la vidéo de quelqu'un.
+**Avant de lancer ou d'installer une appli sur une télé, vérifier aussi qu'aucune vidéo n'y est en
+lecture** (`dumpsys SurfaceFlinger --list | grep SurfaceView`), même si c'est GégéTV ou Subtrad TV
+qui est au premier plan : une installation a masqué une fois une chaîne que quelqu'un regardait.
 
 Ce qui est connu :
 - Les vidéos protégées par DRM ne sont lisibles ni par VLC, ni par mpv, ni par l'application.

@@ -321,21 +321,7 @@ fun SeriesScreen(
                                     memory.episode = index
                                     onEpisode(episode, s, seasonText)
                                 },
-                                leadingContent = {
-                                    Box(Modifier.width(128.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp))
-                                        .background(Color(0xFF1F2937))) {
-                                        if (episode.image.isNotBlank()) {
-                                            AsyncImage(model = episode.image, contentDescription = null,
-                                                       contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                                        }
-                                        // Avancement de la lecture, en bas de l'image.
-                                        val seen = if (episode.watched) 1.0 else episode.progress
-                                        if (seen > 0) {
-                                            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(seen.toFloat())
-                                                .height(4.dp).background(MaterialTheme.colorScheme.primary))
-                                        }
-                                    }
-                                },
+                                leadingContent = { EpisodeThumb(episode) },
                                 headlineContent = {
                                     Text(episodeTitle(episode), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 },
@@ -364,6 +350,22 @@ fun SeriesScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/** Image d'un épisode dans les listes, avec l'avancement de la lecture en bas. */
+@Composable
+fun EpisodeThumb(episode: Episode) {
+    Box(Modifier.width(128.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp)).background(Color(0xFF1F2937))) {
+        if (episode.image.isNotBlank()) {
+            AsyncImage(model = episode.image, contentDescription = null,
+                       contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        }
+        val seen = if (episode.watched) 1.0 else episode.progress
+        if (seen > 0) {
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(seen.toFloat())
+                .height(4.dp).background(MaterialTheme.colorScheme.primary))
         }
     }
 }

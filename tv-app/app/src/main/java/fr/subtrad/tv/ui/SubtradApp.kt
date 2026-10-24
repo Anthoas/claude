@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.tv.material3.MaterialTheme
@@ -17,6 +18,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.darkColorScheme
 import fr.subtrad.tv.Prefs
+import fr.subtrad.tv.R
 import fr.subtrad.tv.SubtradClient
 import fr.subtrad.tv.VideoDetails
 import java.io.File
@@ -35,6 +37,11 @@ fun SubtradApp(prefs: Prefs) {
     var client by remember { mutableStateOf<SubtradClient?>(prefs.client()) }
     val stack = remember { mutableStateListOf<Screen>(if (client == null) Screen.Setup else Screen.Home) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    // « Saison 6 » (ou le nom donné par le fournisseur pour les épisodes spéciaux).
+    fun seasonText(s: fr.subtrad.tv.ReadyEpisode): String =
+        if (s.season == 0) s.seasonName.ifBlank { context.getString(R.string.season_specials) }
+        else context.getString(R.string.season_label, s.season)
     // La liste et la recherche survivent à l'ouverture d'une vidéo.
     val home = remember { HomeState(scope, prefs) }
     val seriesMemory = remember { mutableMapOf<Int, SeriesMemory>() }
@@ -66,7 +73,12 @@ fun SubtradApp(prefs: Prefs) {
                     home.attach(c)
                     HomeScreen(
                         state = home,
-                        onOpen = { item -> push(Screen.Detail(item.id, item.name)) },
+                        onOpen = { item ->
+                            val s = item.series
+                            // Épisode de série : la même fiche que depuis l'onglet Séries.
+                            if (s == null) push(Screen.Detail(item.id, item.name))
+                            else push(Screen.Detail(item.id, s.seriesName, DetailInfo(null, seasonText(s), null, s.episode)))
+                        },
                         onOpenPoster = { p ->
                             if (p.seriesId != null) push(Screen.Series(p.seriesId, p.name))
                             else push(Screen.Detail(p.id, p.name, DetailInfo(null, "", p.vodId)))

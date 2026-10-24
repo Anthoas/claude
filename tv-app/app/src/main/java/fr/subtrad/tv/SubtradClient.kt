@@ -17,6 +17,16 @@ data class VideoItem(
     val kind: String,
     val ready: Boolean,
     val watched: Boolean = false,
+    val series: ReadyEpisode? = null, // épisode de série retrouvé dans le catalogue
+)
+
+/** Un épisode prêt, avec ce que l'onglet Séries en montre : série, saison, image, titres, résumé. */
+data class ReadyEpisode(
+    val seriesId: Int,
+    val seriesName: String,
+    val season: Int,
+    val seasonName: String,
+    val episode: Episode,
 )
 
 data class Page(val total: Int, val items: List<VideoItem>)
@@ -204,11 +214,7 @@ class SubtradClient(address: String, private val code: String) {
             val s = seasons.getJSONObject(i)
             val eps = s.getJSONArray("episodes")
             Season(s.optInt("season"), s.optString("name"), (0 until eps.length()).map { j ->
-                val e = eps.getJSONObject(j)
-                Episode(e.optInt("id", -1), e.optInt("episode"), e.optString("title"), e.optString("duration"),
-                    e.optString("air_date"), e.optString("image"), e.optBoolean("ready"), e.optString("plot"),
-                    e.optBoolean("watched"), e.optDouble("progress", 0.0), e.optString("title_translated"),
-                    e.optString("rating"), e.optString("image_large"))
+                episode(eps.getJSONObject(j))
             })
         })
     }
@@ -254,10 +260,23 @@ class SubtradClient(address: String, private val code: String) {
         val items = o.getJSONArray("items")
         return Page(o.getInt("total"), (0 until items.length()).map { i ->
             val it = items.getJSONObject(i)
+            val series = it.optJSONObject("series")?.let { s ->
+                s.optJSONObject("episode")?.let { e ->
+                    ReadyEpisode(s.optInt("series_id"), s.optString("series_name"), s.optInt("season"),
+                                 s.optString("season_name"), episode(e))
+                }
+            }
             VideoItem(it.getInt("id"), it.getString("name"), it.optString("group"),
-                it.optString("kind"), it.optBoolean("ready"), it.optBoolean("watched"))
+                it.optString("kind"), it.optBoolean("ready"), it.optBoolean("watched"), series)
         })
     }
+
+    private fun episode(e: JSONObject) = Episode(
+        e.optInt("id", -1), e.optInt("episode"), e.optString("title"), e.optString("duration"),
+        e.optString("air_date"), e.optString("image"), e.optBoolean("ready"), e.optString("plot"),
+        e.optBoolean("watched"), e.optDouble("progress", 0.0), e.optString("title_translated"),
+        e.optString("rating"), e.optString("image_large"),
+    )
 
     private fun job(o: JSONObject) = Job(
         id = o.getString("id"), videoId = o.optInt("channel_id", -1), title = o.optString("title"),

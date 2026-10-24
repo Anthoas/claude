@@ -566,7 +566,27 @@ class GuiApp:
                   "kind_label": KIND_LABELS[c.kind], "ready": True,
                   "watched": self.store.progress(c.url)["watched"]}
                  for i, c in candidates if self.is_ready(c)]
-        return {"total": len(items), "items": items[:limit]}
+        items = items[:limit]
+        self._add_episode_sheets(items)
+        return {"total": len(items), "items": items}
+
+    def _add_episode_sheets(self, items: list[dict]) -> None:
+        """Épisodes de série : les informations de l'onglet Séries (image, titres, résumé, saison),
+        sous « series ». Sans catalogue Xtream ou série introuvable : l'épisode reste tel quel."""
+        try:
+            if not self.catalog.available():
+                return
+        except Exception:
+            return
+        for item in items:
+            if item["kind"] != "serie":
+                continue
+            try:
+                found = self.catalog.episode_of(item["id"], item["name"], self.video_status)
+            except Exception:
+                found = None
+            if found:
+                item["series"] = found
 
     def video_for_tv(self, index: int) -> dict:
         """Tout ce qu'il faut à la télé pour lire une vidéo, adresse du flux comprise : cette
