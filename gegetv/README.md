@@ -17,8 +17,10 @@ traduction et sans Mac : elle lit elle-même la playlist M3U.
   bas** passent à la chaîne précédente / suivante des favoris (en boucle) ; hors favoris, haut / bas
   affichent seulement le bandeau. L'ancienne chaîne est arrêtée avant d'ouvrir la nouvelle (abonnement
   à une seule connexion). Pas de bouton favori pendant la
-  vidéo : le père avait peur de retirer un favori par erreur. Vidéo dans une `TextureView`
-  (`res/layout/player_view.xml`) : en `SurfaceView`, la Philips (MediaTek) n'affichait que le son.
+  vidéo : le père avait peur de retirer un favori par erreur. Vidéo en `SurfaceView` (HDR
+  compris) avec une fenêtre sans fond et un fond transparent pendant la lecture : sur la Philips
+  (MediaTek), le fond de la fenêtre cachait la vidéo (son sans image). Une `TextureView` réglait ce
+  problème mais rendait le HDR sombre et terne.
 
 Favoris protégés contre les pertes (`Favorites.kt`, dossier `files/favoris/` de l'appli) :
 enregistrés tout de suite (fichier écrit à côté, `fsync`, puis mis à la place de l'ancien) ; les 5

@@ -168,7 +168,11 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             shape = RectangleShape,
-            colors = SurfaceDefaults.colors(containerColor = Color(0xFF16201A), contentColor = Color.White),
+            // Pendant la lecture, fond transparent : la vidéo est affichée derrière l'application.
+            colors = SurfaceDefaults.colors(
+                containerColor = if (playing != null) Color.Transparent else Color(0xFF16201A),
+                contentColor = Color.White,
+            ),
         ) {
             val channel = playing
             if (channel != null) {
