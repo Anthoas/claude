@@ -34,6 +34,13 @@ est retrouvé par son nom et mis à jour ; introuvable, il reste affiché « Ind
 effacé. Les favoris des premières versions (préférences) sont repris une fois. Testé sur la Philips
 (fichier abîmé, adresse changée, chaîne disparue).
 
+Logos (`Logos.kt`) : ceux de la playlist sont petits (220 à 256 pixels, JPEG flou). GégéTV prend,
+quand elle existe, l'image de 512 pixels détourée de la collection publique tv-logos
+(github.com/tv-logo/tv-logos), retrouvée par le nom de la chaîne (« |FR| LIGUE 1+ 1 FHD » →
+`ligue-1plus-1-fr`, sinon `ligue-1plus-fr`) ; la liste des logos de chaque pays est gardée sur la
+télé et relue tous les 30 jours. Sans correspondance ou si l'image ne se charge pas : logo de la
+playlist. Sur la playlist de test, 356 des 1 598 chaînes |FR| ont un logo net.
+
 Programme (`Epg.kt`) : demandé au serveur Xtream Codes de la playlist (`player_api.php`,
 `get_short_epg`, avec le compte et le numéro tirés de l'adresse de la chaîne), une chaîne à la fois,
 seulement pour la chaîne ouverte et les favoris (le guide complet `xmltv.php` pèse ~40 Mo). Heures

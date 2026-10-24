@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -25,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -49,6 +51,7 @@ import androidx.compose.foundation.Image
 import fr.gege.tv.Channel
 import fr.gege.tv.ChannelStore
 import fr.gege.tv.Guide
+import fr.gege.tv.Logos
 import fr.gege.tv.Program
 import fr.gege.tv.normalize
 import fr.gege.tv.Prefs
@@ -164,6 +167,9 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
     var playing by remember { mutableStateOf<Channel?>(null) }
 
     LaunchedEffect(Unit) { state.start() }
+    val context = LocalContext.current
+    val logos = remember { Logos(context) }
+    LaunchedEffect(Unit) { logos.load() }
     // Chaque minute : l'heure avance (barres d'avancement) et le programme des favoris est vérifié.
     LaunchedEffect(Unit) {
         while (true) {
@@ -174,6 +180,7 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
     }
     BackHandler(enabled = playing != null) { state.lastPlayed = playing; playing = null }
 
+    CompositionLocalProvider(LocalLogos provides logos) {
     MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFFE8B04B))) {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -220,6 +227,7 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
                 }
             }
         }
+    }
     }
 }
 

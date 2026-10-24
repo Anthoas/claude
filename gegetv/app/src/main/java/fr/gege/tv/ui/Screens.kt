@@ -46,19 +46,29 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import fr.gege.tv.Channel
+import fr.gege.tv.Logos
+import androidx.compose.runtime.staticCompositionLocalOf
 import fr.gege.tv.normalize
 import java.text.DateFormat
 import java.util.Date
 
 private val GRAY = Color(0xFF9CA3AF)
 
+/** Logos nets des chaînes (null : seulement ceux de la playlist). */
+val LocalLogos = staticCompositionLocalOf<Logos?> { null }
+
 /** Logo de la chaîne sur un fond sombre, ou ses initiales s'il n'y en a pas. */
 @Composable
 fun ChannelLogo(channel: Channel, modifier: Modifier = Modifier) {
     Box(modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFF243127)), contentAlignment = Alignment.Center) {
-        if (channel.logo.isNotBlank()) {
-            AsyncImage(model = channel.logo, contentDescription = null, contentScale = ContentScale.Fit,
-                       modifier = Modifier.fillMaxSize().padding(8.dp))
+        // Logo net de la collection tv-logos s'il existe, sinon (ou s'il ne se charge pas) celui de la playlist.
+        val better = LocalLogos.current?.of(channel)
+        var failed by remember(better) { mutableStateOf(false) }
+        val model = better?.takeUnless { failed } ?: channel.logo
+        if (model.isNotBlank()) {
+            AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Fit,
+                       onError = { if (model == better) failed = true },
+                       modifier = Modifier.fillMaxSize().padding(if (model == better) 14.dp else 8.dp))
         } else {
             Text(channel.name.take(3).uppercase(), style = MaterialTheme.typography.titleMedium, color = GRAY)
         }
