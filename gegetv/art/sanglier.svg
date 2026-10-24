@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Tête de sanglier, icône de GégéTV -->
+  <rect width="512" height="512" rx="96" fill="#2E4A2F"/>
+  <!-- crinière -->
+  <path d="M176 120 L196 62 L222 112 L246 52 L266 110 L292 56 L312 116 L338 70 L344 136 Z" fill="#2B1A0E"/>
+  <!-- oreilles -->
+  <path d="M120 150 L92 64 L196 128 Z" fill="#4A2E18"/>
+  <path d="M392 150 L420 64 L316 128 Z" fill="#4A2E18"/>
+  <path d="M126 140 L110 92 L172 130 Z" fill="#C98B6B"/>
+  <path d="M386 140 L402 92 L340 130 Z" fill="#C98B6B"/>
+  <!-- tête -->
+  <path d="M256 104 C340 104 398 150 404 236 C410 312 372 386 330 420 L182 420 C140 386 102 312 108 236 C114 150 172 104 256 104 Z" fill="#6B4423"/>
+  <path d="M256 104 C300 104 336 118 360 142 C330 132 296 128 256 128 C216 128 182 132 152 142 C176 118 212 104 256 104 Z" fill="#7E5230"/>
+  <!-- sourcils -->
+  <path d="M158 214 L232 230" stroke="#2B1A0E" stroke-width="16" stroke-linecap="round"/>
+  <path d="M354 214 L280 230" stroke="#2B1A0E" stroke-width="16" stroke-linecap="round"/>
+  <!-- yeux -->
+  <circle cx="196" cy="252" r="17" fill="#120A04"/>
+  <circle cx="316" cy="252" r="17" fill="#120A04"/>
+  <circle cx="202" cy="246" r="5" fill="#FFF"/>
+  <circle cx="322" cy="246" r="5" fill="#FFF"/>
+  <!-- défenses -->
+  <path d="M188 388 C150 380 128 346 136 304 C150 338 170 352 200 356 Z" fill="#F4EEDC"/>
+  <path d="M324 388 C362 380 384 346 376 304 C362 338 342 352 312 356 Z" fill="#F4EEDC"/>
+  <!-- groin -->
+  <ellipse cx="256" cy="362" rx="82" ry="58" fill="#C98B6B"/>
+  <ellipse cx="256" cy="362" rx="82" ry="58" fill="none" stroke="#8A5A3C" stroke-width="8"/>
+  <ellipse cx="226" cy="364" rx="14" ry="20" fill="#4A2E18"/>
+  <ellipse cx="286" cy="364" rx="14" ry="20" fill="#4A2E18"/>
+</svg>

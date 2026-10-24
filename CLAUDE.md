@@ -67,6 +67,14 @@ Ce qui est connu :
   Journal de lecture : `adb logcat -s SubtradTV` (le tampon du journal est petit : `logcat -G 8M`).
 - L'écran n'a que des modes 60 Hz et 30 Hz (pas de 24 Hz) : léger « judder » 3:2 inévitable.
 
+## GégéTV (`gegetv/`) : application des directs pour le père de l'utilisateur
+Android TV, autonome (sans Mac) : lit la playlist M3U, garde les directs, onglets ★ Favoris /
+Rechercher / Réglages, bandeau favori pendant la lecture. Paquet `fr.gege.tv` (coexiste avec
+Subtrad TV). Icône : tête de sanglier (`gegetv/art/`). Testé sur la TCL avec la playlist de
+l'utilisateur (octobre 2026) : chargement (~2 min la première fois), recherche, favoris, son et
+décodeur vidéo HEVC démarrés ; la capture d'écran ne montre pas la vidéo des directs (couche
+vidéo matérielle), à confirmer à l'œil. Télé du père : adresse adb et lien de playlist à demander.
+
 ## Règles de travail
 - Ne jamais écrire dans le dépôt, un message, une capture ou un journal : clé API, mots de passe,
   adresses de flux IPTV (elles contiennent identifiant et mot de passe).

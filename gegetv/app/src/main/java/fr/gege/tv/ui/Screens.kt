@@ -1,0 +1,152 @@
+package fr.gege.tv.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Button
+import androidx.tv.material3.Card
+import androidx.tv.material3.ListItem
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import coil.compose.AsyncImage
+import fr.gege.tv.Channel
+import fr.gege.tv.normalize
+import java.text.DateFormat
+import java.util.Date
+
+private val GRAY = Color(0xFF9CA3AF)
+
+/** Logo de la chaîne sur un fond sombre, ou ses initiales s'il n'y en a pas. */
+@Composable
+fun ChannelLogo(channel: Channel, modifier: Modifier = Modifier) {
+    Box(modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFF243127)), contentAlignment = Alignment.Center) {
+        if (channel.logo.isNotBlank()) {
+            AsyncImage(model = channel.logo, contentDescription = null, contentScale = ContentScale.Fit,
+                       modifier = Modifier.fillMaxSize().padding(8.dp))
+        } else {
+            Text(channel.name.take(3).uppercase(), style = MaterialTheme.typography.titleMedium, color = GRAY)
+        }
+    }
+}
+
+@Composable
+fun FavoritesScreen(state: GegeState, onPlay: (Channel) -> Unit) {
+    if (state.favorites.isEmpty()) {
+        Column(Modifier.padding(top = 32.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Aucune chaîne en favori pour l'instant.", style = MaterialTheme.typography.titleLarge)
+            Text("Va dans « Rechercher », ouvre une chaîne, puis appuie sur OK et choisis « ★ Ajouter aux favoris ».",
+                 color = GRAY)
+        }
+        return
+    }
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(5),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+        contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp),
+    ) {
+        items(state.favorites, key = { it.url }) { channel ->
+            Column {
+                Card(onClick = { onPlay(channel) }, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+                    ChannelLogo(channel, Modifier.fillMaxSize())
+                }
+                Text(channel.name, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun SearchScreen(state: GegeState, onPlay: (Channel) -> Unit) {
+    val results by remember {
+        derivedStateOf {
+            val words = normalize(state.query).split(" ").filter { it.isNotBlank() }
+            if (words.isEmpty()) emptyList()
+            else state.channels.filter { c -> words.all { it in c.haystack } }
+                .sortedBy { if (it.name.trimStart('|', ' ').startsWith("FR")) 0 else 1 } // chaînes françaises d'abord
+                .take(300)
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        TvTextField(
+            value = state.query, onValueChange = { state.query = it },
+            placeholder = "Nom de la chaîne (ex. : TF1, France 2, BFM…)",
+            imeAction = ImeAction.Search, modifier = Modifier.width(620.dp),
+        )
+        Text(
+            when {
+                state.channels.isEmpty() && !state.loading -> "Aucune chaîne chargée : vérifie le lien dans « Réglages »."
+                state.query.isBlank() -> "${state.channels.size} chaînes en direct. Tape le début d'un nom."
+                results.isEmpty() -> "Aucune chaîne trouvée."
+                else -> "${results.size}${if (results.size == 300) "+" else ""} chaîne(s)"
+            },
+            color = GRAY,
+        )
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            items(results, key = { it.url }) { channel ->
+                ListItem(
+                    selected = false,
+                    onClick = { onPlay(channel) },
+                    leadingContent = { ChannelLogo(channel, Modifier.width(96.dp).aspectRatio(16f / 9f)) },
+                    headlineContent = { Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    supportingContent = { Text(channel.group, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    trailingContent = {
+                        if (state.isFavorite(channel)) Text("★", color = MaterialTheme.colorScheme.primary,
+                                                             style = MaterialTheme.typography.titleLarge)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen(state: GegeState, onRefresh: (String?) -> Unit) {
+    var url by remember { mutableStateOf(state.playlistUrl) }
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(top = 8.dp)) {
+        Text("Lien de la playlist (M3U)", style = MaterialTheme.typography.titleMedium)
+        TvTextField(value = url, onValueChange = { url = it }, placeholder = "http://…",
+                    keyboardType = KeyboardType.Uri, secret = true, modifier = Modifier.width(720.dp))
+        Text("Le lien contient l'identifiant et le mot de passe : il reste sur cette télé.", color = GRAY)
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Button(onClick = { onRefresh(url) }, enabled = !state.loading && url.isNotBlank()) {
+                Text("Enregistrer et actualiser la liste des chaînes")
+            }
+        }
+        val when_ = if (state.savedAt > 0) DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(state.savedAt)) else ""
+        Text(if (state.channels.isEmpty()) "Aucune chaîne chargée."
+             else "${state.channels.size} chaînes en direct · liste du $when_", color = GRAY)
+        state.error?.let { Text("Erreur : $it", color = Color(0xFFFCA5A5)) }
+    }
+}
