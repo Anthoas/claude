@@ -88,7 +88,9 @@ par le fond de la fenêtre (son sans image). **Les deux applis gardent la `Surfa
 sombre et terne) avec une fenêtre sans fond et un écran de lecture transparent : image normale
 confirmée à l'œil sur la Philips (Subtrad TV avec sous-titres indonésiens, GégéTV sur TF1 HDR,
 octobre 2026) et sur la TCL (les deux applis, HEVC Realtek, 0 image sautée). Les captures d'écran de la Philips
-montrent la vidéo HDR en couleurs fausses (vert/blanc) : ne pas s'y fier. Son clavier à l'écran garde les flèches : Retour le ferme. Télé du père : adresse adb et lien
+montrent la vidéo HDR en couleurs fausses (vert/blanc) : ne pas s'y fier. Son clavier à l'écran garde les flèches : Retour le ferme. **Ne pas faire `am force-stop` de l'écran d'accueil
+(Projectivy, `com.spocky.projengmenu`)** : sur la Philips, la télé a redémarré juste après (octobre
+2026). Une nouvelle bannière d'appli n'apparaît qu'après un redémarrage de la télé. Télé du père : adresse adb et lien
 de playlist à demander.
 
 ## Règles de travail
