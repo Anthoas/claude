@@ -66,6 +66,8 @@ private const val OVERLAY_MS = 6_000L
  * Une chaîne en direct, en plein écran. Un bandeau d'information (nom de la chaîne, programme),
  * sans bouton, s'affiche à l'ouverture et à chaque appui sur OK, puis se cache tout seul.
  * Retour : revenir à la liste. (Les favoris se gèrent dans les listes, par un appui long.)
+ * Pour une chaîne favorite, haut / bas passent à la chaîne précédente / suivante des favoris
+ * (`onPrevious` / `onNext` nuls sinon).
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -74,6 +76,8 @@ fun PlayerScreen(
     programs: List<Program>,
     onOpen: () -> Unit,
     onExit: () -> Unit,
+    onPrevious: (() -> Unit)? = null,
+    onNext: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var overlay by remember { mutableStateOf(true) }
@@ -91,11 +95,6 @@ fun PlayerScreen(
         ExoPlayer.Builder(context, DefaultRenderersFactory(context).setEnableDecoderFallback(true))
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             .build()
-            .apply {
-                setMediaItem(mediaItemFor(channel.url))
-                prepare()
-                playWhenReady = true
-            }
     }
 
     LaunchedEffect(channel) { onOpen() } // le programme de la chaîne, pour le bandeau
@@ -113,6 +112,11 @@ fun PlayerScreen(
             }
         }
         player.addListener(listener)
+        // Démarré ici, après l'arrêt de la chaîne précédente : l'abonnement n'accepte qu'une
+        // vidéo à la fois.
+        player.setMediaItem(mediaItemFor(channel.url))
+        player.prepare()
+        player.playWhenReady = true
         onDispose {
             player.removeListener(listener)
             player.release()
@@ -144,6 +148,16 @@ fun PlayerScreen(
                     return@onPreviewKeyEvent true
                 }
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                // Zapping dans les favoris (un changement par appui, même si la touche reste enfoncée).
+                val zap = when (event.key) {
+                    Key.DirectionUp -> onPrevious
+                    Key.DirectionDown -> onNext
+                    else -> null
+                }
+                if (zap != null) {
+                    if (event.nativeKeyEvent.repeatCount == 0) zap()
+                    return@onPreviewKeyEvent true
+                }
                 touched++
                 // OK ou les flèches affichent le bandeau (ou le gardent 6 s de plus). En cas
                 // d'erreur, les touches vont aux boutons « Réessayer » / « Retour ».

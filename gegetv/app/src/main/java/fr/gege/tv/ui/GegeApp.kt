@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -141,12 +142,22 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
         ) {
             val channel = playing
             if (channel != null) {
-                PlayerScreen(
-                    channel = channel,
-                    programs = state.programsOf(channel),
-                    onOpen = { scope.launch { state.loadPrograms(listOf(channel)) } },
-                    onExit = { playing = null },
-                )
+                // Chaîne favorite : haut / bas passent à la précédente / suivante (en boucle).
+                val index = state.favorites.indexOfFirst { it.url == channel.url }
+                val zap: ((Int) -> Unit)? = if (index < 0 || state.favorites.size < 2) null else { step ->
+                    val n = state.favorites.size
+                    playing = state.favorites[(index + step + n) % n]
+                }
+                key(channel.url) { // nouvelle chaîne : lecteur et bandeau repartent de zéro
+                    PlayerScreen(
+                        channel = channel,
+                        programs = state.programsOf(channel),
+                        onOpen = { scope.launch { state.loadPrograms(listOf(channel)) } },
+                        onExit = { playing = null },
+                        onPrevious = zap?.let { { it(-1) } },
+                        onNext = zap?.let { { it(1) } },
+                    )
+                }
             } else {
                 Home(state, onPlay = { playing = it }, onRefresh = { url -> scope.launch { state.refresh(url) } })
                 // Appui long sur une chaîne : on demande avant d'ajouter ou de retirer un favori.

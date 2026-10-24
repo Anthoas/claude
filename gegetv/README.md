@@ -13,7 +13,10 @@ traduction et sans Mac : elle lit elle-même la playlist M3U.
 - **Réglages** : lien de la playlist (masqué), « Enregistrer et actualiser la liste des chaînes ».
 - **Lecture** : plein écran ; un bandeau d'information **sans bouton** (logo, nom, émission en
   cours avec horaires, avancement et résumé, émission suivante) s'affiche à l'ouverture et à chaque
-  appui sur OK, puis se cache après 6 s. Retour revient à la liste. Pas de bouton favori pendant la
+  appui sur OK, puis se cache après 6 s. Retour revient à la liste. **Chaîne favorite : haut /
+  bas** passent à la chaîne précédente / suivante des favoris (en boucle) ; hors favoris, haut / bas
+  affichent seulement le bandeau. L'ancienne chaîne est arrêtée avant d'ouvrir la nouvelle (abonnement
+  à une seule connexion). Pas de bouton favori pendant la
   vidéo : le père avait peur de retirer un favori par erreur. Vidéo dans une `TextureView`
   (`res/layout/player_view.xml`) : en `SurfaceView`, la Philips (MediaTek) n'affichait que le son.
 
