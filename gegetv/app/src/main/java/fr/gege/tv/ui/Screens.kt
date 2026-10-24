@@ -17,10 +17,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.tv.material3.Border
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ListItemDefaults
 import androidx.compose.foundation.lazy.items
@@ -96,7 +94,8 @@ fun FavoritesScreen(state: GegeState, onPlay: (Channel) -> Unit, startFocus: Foc
                     onLongClick = { state.asking = channel },
                     shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
                     border = CardDefaults.border(
-                        focusedBorder = Border(BorderStroke(4.dp, SELECT_RED), shape = RoundedCornerShape(8.dp)),
+                        focusedBorder = selectedBorder(RoundedCornerShape(8.dp)),
+                        pressedBorder = selectedBorder(RoundedCornerShape(8.dp)),
                     ),
                     modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
                         .then(if (index == start && startFocus != null) Modifier.focusRequester(startFocus) else Modifier),
@@ -155,7 +154,12 @@ fun SearchScreen(state: GegeState, onPlay: (Channel) -> Unit) {
                     selected = false,
                     onClick = { onPlay(channel) },
                     onLongClick = { state.asking = channel },
-                    colors = ListItemDefaults.colors(focusedContainerColor = SELECT_RED, focusedContentColor = Color.White),
+                    colors = ListItemDefaults.colors(
+                        focusedContainerColor = Color.Transparent, focusedContentColor = Color.White,
+                        pressedContainerColor = Color.Transparent, pressedContentColor = Color.White,
+                    ),
+                    border = ListItemDefaults.border(focusedBorder = selectedBorder(RoundedCornerShape(8.dp)),
+                                                     pressedBorder = selectedBorder(RoundedCornerShape(8.dp))),
                     leadingContent = { ChannelLogo(channel, Modifier.width(96.dp).aspectRatio(16f / 9f)) },
                     headlineContent = { Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     supportingContent = { Text(channel.group, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -178,7 +182,7 @@ fun SettingsScreen(state: GegeState, onRefresh: (String?) -> Unit) {
                     keyboardType = KeyboardType.Uri, secret = true, modifier = Modifier.width(720.dp))
         Text("Le lien contient l'identifiant et le mot de passe : il reste sur cette télé.", color = GRAY)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(onClick = { onRefresh(url) }, enabled = !state.loading && url.isNotBlank(), colors = redButtonColors()) {
+            Button(onClick = { onRefresh(url) }, enabled = !state.loading && url.isNotBlank(), colors = plainButtonColors(), border = plainButtonBorder()) {
                 Text("Enregistrer et actualiser la liste des chaînes")
             }
         }

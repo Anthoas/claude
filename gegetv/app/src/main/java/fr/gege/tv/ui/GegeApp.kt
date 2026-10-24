@@ -28,6 +28,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -225,6 +228,7 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
 private fun Home(state: GegeState, onPlay: (Channel) -> Unit, onRefresh: (String?) -> Unit) {
     val tabFocus = remember { FocusRequester() }
     val channelFocus = remember { FocusRequester() }
+    var focusedTab by remember { mutableIntStateOf(-1) } // onglet entouré du liseré rouge
     // Sélecteur de départ : sur une chaîne des favoris s'il y en a, sinon sur l'onglet.
     LaunchedEffect(Unit) {
         val onChannel = state.tab == TAB_FAVORITES && state.favorites.isNotEmpty() &&
@@ -244,7 +248,7 @@ private fun Home(state: GegeState, onPlay: (Channel) -> Unit, onRefresh: (String
                 indicator = { positions, rowFocused ->
                     positions.getOrNull(state.tab)?.let {
                         TabRowDefaults.PillIndicator(currentTabPosition = it, doesTabRowHaveFocus = rowFocused,
-                                                     activeColor = SELECT_RED, inactiveColor = Color(0xFF2B3830))
+                                                     activeColor = Color(0xFF2B3830), inactiveColor = Color(0xFF2B3830))
                     }
                 },
             ) {
@@ -254,7 +258,9 @@ private fun Home(state: GegeState, onPlay: (Channel) -> Unit, onRefresh: (String
                         onFocus = { state.tab = index },
                         colors = TabDefaults.pillIndicatorTabColors(focusedContentColor = Color.White,
                                                                     selectedContentColor = Color.White),
-                        modifier = if (index == state.tab) Modifier.focusRequester(tabFocus) else Modifier,
+                        modifier = (if (index == state.tab) Modifier.focusRequester(tabFocus) else Modifier)
+                            .onFocusChanged { focusedTab = if (it.isFocused) index else if (focusedTab == index) -1 else focusedTab }
+                            .then(if (focusedTab == index) Modifier.border(3.dp, SELECT_RED, CircleShape) else Modifier),
                     ) { Text(label, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) }
                 }
             }

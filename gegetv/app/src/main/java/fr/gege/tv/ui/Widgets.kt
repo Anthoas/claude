@@ -1,7 +1,9 @@
 package fr.gege.tv.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +39,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -45,21 +48,44 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.OutlinedButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
-/** Couleur du sélecteur (élément choisi à la télécommande), partout dans l'application. */
+/**
+ * Sélecteur (élément choisi à la télécommande) : un liseré rouge autour, sans changer les couleurs
+ * de l'élément (ni fond rouge, ni fond clair).
+ */
 val SELECT_RED = Color(0xFFE53935)
+private val BUTTON_BG = Color(0xFF2B3830)
+
+fun selectedBorder(shape: Shape) = Border(BorderStroke(3.dp, SELECT_RED), shape = shape)
 
 @Composable
-fun redButtonColors() = ButtonDefaults.colors(focusedContainerColor = SELECT_RED, focusedContentColor = Color.White)
+fun plainButtonColors() = ButtonDefaults.colors(
+    containerColor = BUTTON_BG, contentColor = Color.White,
+    focusedContainerColor = BUTTON_BG, focusedContentColor = Color.White,
+    pressedContainerColor = BUTTON_BG, pressedContentColor = Color.White,
+)
 
 @Composable
-fun redOutlinedButtonColors() =
-    OutlinedButtonDefaults.colors(focusedContainerColor = SELECT_RED, focusedContentColor = Color.White)
+fun plainButtonBorder() = ButtonDefaults.border(
+    focusedBorder = selectedBorder(CircleShape), pressedBorder = selectedBorder(CircleShape),
+)
+
+@Composable
+fun plainOutlinedButtonColors() = OutlinedButtonDefaults.colors(
+    contentColor = Color.White, focusedContainerColor = Color.Transparent, focusedContentColor = Color.White,
+    pressedContainerColor = Color.Transparent, pressedContentColor = Color.White,
+)
+
+@Composable
+fun plainOutlinedButtonBorder() = OutlinedButtonDefaults.border(
+    focusedBorder = selectedBorder(CircleShape), pressedBorder = selectedBorder(CircleShape),
+)
 
 /** Champ de saisie pour la télécommande : cadre visible quand il a le focus. */
 @Composable
@@ -149,10 +175,10 @@ fun ConfirmDialog(question: String, onYes: () -> Unit, onNo: () -> Unit) {
         ) {
             Text(question, style = MaterialTheme.typography.headlineSmall, color = Color.White, textAlign = TextAlign.Center)
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Button(onClick = onYes, modifier = Modifier.width(160.dp), colors = redButtonColors()) {
+                Button(onClick = onYes, modifier = Modifier.width(160.dp), colors = plainButtonColors(), border = plainButtonBorder()) {
                     Text("Oui", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 }
-                Button(onClick = onNo, modifier = Modifier.width(160.dp).focusRequester(no), colors = redButtonColors()) {
+                Button(onClick = onNo, modifier = Modifier.width(160.dp).focusRequester(no), colors = plainButtonColors(), border = plainButtonBorder()) {
                     Text("Non", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 }
             }
