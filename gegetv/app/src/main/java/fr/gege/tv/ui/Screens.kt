@@ -15,7 +15,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.tv.material3.Border
+import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.ListItemDefaults
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -61,7 +68,7 @@ fun ChannelLogo(channel: Channel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun FavoritesScreen(state: GegeState, onPlay: (Channel) -> Unit) {
+fun FavoritesScreen(state: GegeState, onPlay: (Channel) -> Unit, startFocus: FocusRequester? = null) {
     if (state.favorites.isEmpty()) {
         Column(Modifier.padding(top = 32.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Aucune chaîne en favori pour l'instant.", style = MaterialTheme.typography.titleLarge)
@@ -72,15 +79,28 @@ fun FavoritesScreen(state: GegeState, onPlay: (Channel) -> Unit) {
     }
     Text("OK : regarder · OK appuyé longtemps : retirer des favoris", color = GRAY,
          style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp))
+    // Sélecteur de départ : la chaîne qu'on vient de quitter, sinon la première.
+    val start = state.favorites.indexOfFirst { it.url == state.lastPlayed?.url }.coerceAtLeast(0)
+    val grid = rememberLazyGridState(initialFirstVisibleItemIndex = start)
     LazyVerticalGrid(
+        state = grid,
         columns = GridCells.Fixed(5),
         horizontalArrangement = Arrangement.spacedBy(18.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
         contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp),
     ) {
-        items(state.favorites, key = { it.url }) { channel ->
+        itemsIndexed(state.favorites, key = { _, c -> c.url }) { index, channel ->
             Column {
-                Card(onClick = { onPlay(channel) }, onLongClick = { state.asking = channel }, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+                Card(
+                    onClick = { onPlay(channel) },
+                    onLongClick = { state.asking = channel },
+                    shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
+                    border = CardDefaults.border(
+                        focusedBorder = Border(BorderStroke(4.dp, SELECT_RED), shape = RoundedCornerShape(8.dp)),
+                    ),
+                    modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                        .then(if (index == start && startFocus != null) Modifier.focusRequester(startFocus) else Modifier),
+                ) {
                     ChannelLogo(channel, Modifier.fillMaxSize())
                 }
                 Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
@@ -135,6 +155,7 @@ fun SearchScreen(state: GegeState, onPlay: (Channel) -> Unit) {
                     selected = false,
                     onClick = { onPlay(channel) },
                     onLongClick = { state.asking = channel },
+                    colors = ListItemDefaults.colors(focusedContainerColor = SELECT_RED, focusedContentColor = Color.White),
                     leadingContent = { ChannelLogo(channel, Modifier.width(96.dp).aspectRatio(16f / 9f)) },
                     headlineContent = { Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     supportingContent = { Text(channel.group, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -157,7 +178,7 @@ fun SettingsScreen(state: GegeState, onRefresh: (String?) -> Unit) {
                     keyboardType = KeyboardType.Uri, secret = true, modifier = Modifier.width(720.dp))
         Text("Le lien contient l'identifiant et le mot de passe : il reste sur cette télé.", color = GRAY)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(onClick = { onRefresh(url) }, enabled = !state.loading && url.isNotBlank()) {
+            Button(onClick = { onRefresh(url) }, enabled = !state.loading && url.isNotBlank(), colors = redButtonColors()) {
                 Text("Enregistrer et actualiser la liste des chaînes")
             }
         }

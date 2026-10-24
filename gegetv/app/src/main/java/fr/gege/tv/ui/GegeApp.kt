@@ -25,7 +25,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -35,7 +37,9 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Tab
+import androidx.tv.material3.TabDefaults
 import androidx.tv.material3.TabRow
+import androidx.tv.material3.TabRowDefaults
 import androidx.tv.material3.Text
 import androidx.tv.material3.darkColorScheme
 import androidx.compose.foundation.Image
@@ -80,6 +84,9 @@ class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
         list.map { channel -> async { channel.url to guide.programs(channel) } }.awaitAll()
             .forEach { (url, found) -> programs[url] = found }
     }
+
+    /** Dernière chaîne regardée : le sélecteur y revient en quittant la lecture. */
+    var lastPlayed by mutableStateOf<Channel?>(null)
 
     /** Chaîne pour laquelle la question « ajouter / retirer des favoris ? » est posée. */
     var asking by mutableStateOf<Channel?>(null)
@@ -162,7 +169,7 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
             delay(60_000)
         }
     }
-    BackHandler(enabled = playing != null) { playing = null }
+    BackHandler(enabled = playing != null) { state.lastPlayed = playing; playing = null }
 
     MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFFE8B04B))) {
         Surface(
@@ -187,7 +194,7 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
                         channel = channel,
                         programs = state.programsOf(channel),
                         onOpen = { scope.launch { state.loadPrograms(listOf(channel)) } },
-                        onExit = { playing = null },
+                        onExit = { state.lastPlayed = playing; playing = null },
                         onPrevious = zap?.let { { it(-1) } },
                         onNext = zap?.let { { it(1) } },
                     )
@@ -213,20 +220,40 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun Home(state: GegeState, onPlay: (Channel) -> Unit, onRefresh: (String?) -> Unit) {
     val tabFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { tabFocus.requestFocus() } }
+    val channelFocus = remember { FocusRequester() }
+    // Sélecteur de départ : sur une chaîne des favoris s'il y en a, sinon sur l'onglet.
+    LaunchedEffect(Unit) {
+        val onChannel = state.tab == TAB_FAVORITES && state.favorites.isNotEmpty() &&
+            runCatching { channelFocus.requestFocus() }.isSuccess
+        if (!onChannel) runCatching { tabFocus.requestFocus() }
+    }
     Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 24.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Image(painterResource(R.mipmap.ic_launcher), contentDescription = null, modifier = Modifier.size(52.dp))
             Text("GégéTV", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.width(12.dp))
-            TabRow(selectedTabIndex = state.tab) {
+            TabRow(
+                selectedTabIndex = state.tab,
+                // En arrivant sur les onglets (par exemple en montant depuis une chaîne), le
+                // sélecteur va sur l'onglet affiché, pas sur celui qui se trouve juste au-dessus.
+                modifier = Modifier.focusProperties { enter = { tabFocus } },
+                indicator = { positions, rowFocused ->
+                    positions.getOrNull(state.tab)?.let {
+                        TabRowDefaults.PillIndicator(currentTabPosition = it, doesTabRowHaveFocus = rowFocused,
+                                                     activeColor = SELECT_RED, inactiveColor = Color(0xFF2B3830))
+                    }
+                },
+            ) {
                 listOf("★ Favoris", "Rechercher", "Réglages").forEachIndexed { index, label ->
                     Tab(
                         selected = index == state.tab,
                         onFocus = { state.tab = index },
+                        colors = TabDefaults.pillIndicatorTabColors(focusedContentColor = Color.White,
+                                                                    selectedContentColor = Color.White),
                         modifier = if (index == state.tab) Modifier.focusRequester(tabFocus) else Modifier,
                     ) { Text(label, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) }
                 }
@@ -239,7 +266,7 @@ private fun Home(state: GegeState, onPlay: (Channel) -> Unit, onRefresh: (String
             ProgressBar(state.progress.takeIf { it >= 0 }?.toDouble(), Modifier.padding(vertical = 8.dp))
         }
         when (state.tab) {
-            TAB_FAVORITES -> FavoritesScreen(state, onPlay)
+            TAB_FAVORITES -> FavoritesScreen(state, onPlay, channelFocus)
             TAB_SEARCH -> SearchScreen(state, onPlay)
             else -> SettingsScreen(state, onRefresh)
         }

@@ -3,6 +3,9 @@
 Application Android TV pour regarder les **chaînes en direct** d'une playlist IPTV, sans
 traduction et sans Mac : elle lit elle-même la playlist M3U.
 
+- **Sélecteur rouge** (`SELECT_RED`) sur tous les éléments choisis à la télécommande. À l'ouverture,
+  il est sur la première chaîne des favoris ; en quittant une chaîne, il revient sur celle-ci ; en
+  montant vers les onglets, il arrive sur l'onglet affiché (pas sur celui du dessus).
 - **★ Favoris** (à l'ouverture) : grille des chaînes favorites, OK pour regarder, **OK appuyé
   longtemps** pour la retirer (question Oui / Non, « Non » sélectionné d'office) ; sous chaque
   chaîne, l'émission en cours et une barre qui montre où elle en est (mise à jour chaque minute).

@@ -229,10 +229,11 @@ fun PlayerScreen(
             ) {
                 Text(message, color = Color(0xFFFCA5A5))
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Button(onClick = { error = null; attempt++ }, modifier = Modifier.focusRequester(retryButton)) {
+                    Button(onClick = { error = null; attempt++ }, modifier = Modifier.focusRequester(retryButton),
+                           colors = redButtonColors()) {
                         Text("Réessayer")
                     }
-                    OutlinedButton(onClick = onExit) { Text("Retour") }
+                    OutlinedButton(onClick = onExit, colors = redOutlinedButtonColors()) { Text("Retour") }
                 }
             }
         }

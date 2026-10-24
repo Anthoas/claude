@@ -46,8 +46,20 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.OutlinedButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+
+/** Couleur du sélecteur (élément choisi à la télécommande), partout dans l'application. */
+val SELECT_RED = Color(0xFFE53935)
+
+@Composable
+fun redButtonColors() = ButtonDefaults.colors(focusedContainerColor = SELECT_RED, focusedContentColor = Color.White)
+
+@Composable
+fun redOutlinedButtonColors() =
+    OutlinedButtonDefaults.colors(focusedContainerColor = SELECT_RED, focusedContentColor = Color.White)
 
 /** Champ de saisie pour la télécommande : cadre visible quand il a le focus. */
 @Composable
@@ -85,7 +97,7 @@ fun TvTextField(
             }
             .onFocusChanged { focused = it.isFocused }
             .background(Color(0xFF1F2937), RoundedCornerShape(8.dp))
-            .border(2.dp, if (focused) accent else Color(0xFF374151), RoundedCornerShape(8.dp))
+            .border(if (focused) 3.dp else 2.dp, if (focused) SELECT_RED else Color(0xFF374151), RoundedCornerShape(8.dp))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         decorationBox = { inner ->
             Box {
@@ -137,10 +149,10 @@ fun ConfirmDialog(question: String, onYes: () -> Unit, onNo: () -> Unit) {
         ) {
             Text(question, style = MaterialTheme.typography.headlineSmall, color = Color.White, textAlign = TextAlign.Center)
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Button(onClick = onYes, modifier = Modifier.width(160.dp)) {
+                Button(onClick = onYes, modifier = Modifier.width(160.dp), colors = redButtonColors()) {
                     Text("Oui", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 }
-                Button(onClick = onNo, modifier = Modifier.width(160.dp).focusRequester(no)) {
+                Button(onClick = onNo, modifier = Modifier.width(160.dp).focusRequester(no), colors = redButtonColors()) {
                     Text("Non", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 }
             }
