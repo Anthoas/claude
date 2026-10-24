@@ -74,7 +74,12 @@ le bandeau et sous chaque favori. Paquet `fr.gege.tv` (coexiste avec
 Subtrad TV). Icône : tête de sanglier (`gegetv/art/`). Testé sur la TCL avec la playlist de
 l'utilisateur (octobre 2026) : chargement (~2 min la première fois), recherche, favoris, son et
 décodeur vidéo HEVC démarrés, image de TF1 vue sur une capture (la capture la montre parfois
-noire : couche vidéo matérielle), programme de TF1 affiché (octobre 2026). Télé du père : adresse adb et lien de playlist à demander.
+noire : couche vidéo matérielle), programme de TF1 affiché (octobre 2026). Deuxième télé de l'utilisateur pour les essais : **Philips 2021/22 UHD Android TV**
+(Android 11, SDK 30, `armeabi-v7a`, puce MediaTek `mt5895`), `192.168.1.29:5555`, autorisée en
+octobre 2026. Sur cette Philips, la vidéo en `SurfaceView` restait cachée derrière l'appli (son sans
+image) : le lecteur utilise une `TextureView` (`res/layout/player_view.xml`), vérifié sur les deux
+télés. Son clavier à l'écran garde les flèches : Retour le ferme. Télé du père : adresse adb et lien
+de playlist à demander.
 
 ## Règles de travail
 - Ne jamais écrire dans le dépôt, un message, une capture ou un journal : clé API, mots de passe,

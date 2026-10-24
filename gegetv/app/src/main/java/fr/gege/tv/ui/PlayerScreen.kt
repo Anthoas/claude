@@ -1,5 +1,6 @@
 package fr.gege.tv.ui
 
+import android.view.LayoutInflater
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -53,6 +54,7 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import fr.gege.tv.Channel
 import fr.gege.tv.Program
+import fr.gege.tv.R
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -159,11 +161,7 @@ fun PlayerScreen(
     ) {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    keepScreenOn = true
-                    isFocusable = false
-                }
+                LayoutInflater.from(ctx).inflate(R.layout.player_view, null) as PlayerView
             },
             update = { it.player = player },
             modifier = Modifier.fillMaxSize(),
