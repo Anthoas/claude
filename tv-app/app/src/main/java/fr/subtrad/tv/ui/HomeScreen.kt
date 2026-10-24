@@ -10,16 +10,22 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -31,8 +37,6 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
-import androidx.tv.material3.Tab
-import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
 import fr.subtrad.tv.Prefs
 import fr.subtrad.tv.R
@@ -216,19 +220,18 @@ fun HomeScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 27.dp)) {
+    // Menu de gauche (style ZenIPTV) : les trois pages, puis Réglages (qui s'ouvre avec OK).
+    val rail = tabs.zip(listOf(R.drawable.ic_ready, R.drawable.ic_movie, R.drawable.ic_series))
+        .map { (label, icon) -> RailItem(stringResource(label), icon) } +
+        RailItem(stringResource(R.string.settings_button), R.drawable.ic_settings, page = false)
+    Row(Modifier.fillMaxSize()) {
+    NavRail(rail, selected = state.tab, selectedFocus = tabFocus,
+            onSelect = { index -> if (index < tabs.size) state.selectTab(index) else onSettings() }) {
+        Image(painterResource(R.mipmap.ic_launcher), contentDescription = null,
+              modifier = Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)))
+    }
+    Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 40.dp, vertical = 27.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            TabRow(selectedTabIndex = state.tab) {
-                tabs.forEachIndexed { index, label ->
-                    Tab(
-                        selected = index == state.tab,
-                        onFocus = { state.selectTab(index) },
-                        modifier = if (index == state.tab) Modifier.focusRequester(tabFocus) else Modifier,
-                    ) {
-                        Text(stringResource(label), modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-                    }
-                }
-            }
             TvTextField(
                 value = state.query, onValueChange = { state.query = it },
                 placeholder = stringResource(R.string.search_hint),
@@ -236,7 +239,6 @@ fun HomeScreen(
                 modifier = Modifier.weight(1f),
             )
             Button(onClick = state::search) { Text(stringResource(R.string.search_button)) }
-            OutlinedButton(onClick = onSettings) { Text(stringResource(R.string.settings_button)) }
         }
 
         if (state.recent.isNotEmpty()) {
@@ -320,6 +322,7 @@ fun HomeScreen(
                 }
             }
         }
+    }
     }
 }
 

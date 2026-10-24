@@ -17,6 +17,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Icon
+import androidx.tv.material3.Surface
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
@@ -117,4 +133,54 @@ fun errorMessage(error: Throwable): String = when {
     error is SubtradException && error.unreachable -> stringResource(R.string.error_network)
     error is SubtradException && error.badCode -> stringResource(R.string.error_code)
     else -> stringResource(R.string.error_prefix, error.message ?: error.javaClass.simpleName)
+}
+
+/** Un bouton du menu de gauche : une petite icône, son nom ; `page` : ouvre sa page dès qu'on passe dessus. */
+data class RailItem(val label: String, val icon: Int, val page: Boolean = true)
+
+/**
+ * Menu de gauche (comme ZenIPTV) : une colonne étroite avec de petites icônes ; la page affichée a
+ * un fond arrondi. En arrivant dans le menu, le sélecteur va sur la page affichée (`selectedFocus`).
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun NavRail(
+    items: List<RailItem>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    selectedFocus: FocusRequester,
+    top: @Composable () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxHeight().width(116.dp).background(Color(0xFF0B1120)).padding(vertical = 26.dp)
+            .focusProperties { enter = { selectedFocus } },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        top()
+        Spacer(Modifier.height(16.dp))
+        items.forEachIndexed { index, item ->
+            val shape = RoundedCornerShape(16.dp)
+            Surface(
+                onClick = { onSelect(index) },
+                shape = ClickableSurfaceDefaults.shape(shape),
+                colors = ClickableSurfaceDefaults.colors(
+                    containerColor = if (index == selected) Color(0xFF1F2937) else Color.Transparent,
+                    contentColor = if (index == selected) Color.White else Color(0xFF9CA3AF),
+                    focusedContainerColor = Color(0xFFE5E7EB), focusedContentColor = Color(0xFF111827),
+                    pressedContainerColor = Color(0xFFE5E7EB), pressedContentColor = Color(0xFF111827),
+                ),
+                modifier = Modifier.width(92.dp).height(84.dp)
+                    .then(if (index == selected) Modifier.focusRequester(selectedFocus) else Modifier)
+                    .onFocusChanged { if (it.isFocused && item.page && index != selected) onSelect(index) },
+            ) {
+                Column(Modifier.fillMaxSize().padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                       verticalArrangement = Arrangement.Center) {
+                    Icon(painterResource(item.icon), contentDescription = item.label, modifier = Modifier.size(30.dp))
+                    Text(item.label, fontSize = 11.sp, maxLines = 2, lineHeight = 13.sp,
+                         textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+    }
 }

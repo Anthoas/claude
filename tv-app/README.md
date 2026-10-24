@@ -59,3 +59,9 @@ adb shell am start -S -n fr.subtrad.tv/.MainActivity --es address 192.168.1.35:8
 Dans les champs de saisie, les quatre flèches font sortir du champ (sinon gauche/droite déplaçaient
 le curseur et « Réglages » était inaccessible depuis la recherche).
 
+## Menu de gauche (style ZenIPTV)
+
+Colonne étroite à gauche : le S vert, puis Prêtes à regarder, Films, Séries (la page s'affiche dès
+qu'on passe sur le bouton) et Réglages (s'ouvre avec OK). Petites icônes Material (`res/drawable/ic_*.xml`)
+avec leur nom ; la recherche reste en haut du contenu.
+

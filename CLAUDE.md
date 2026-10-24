@@ -94,6 +94,12 @@ montrent la vidéo HDR en couleurs fausses (vert/blanc) : ne pas s'y fier. Son c
 2026). Une nouvelle bannière d'appli n'apparaît qu'après un redémarrage de la télé. Télé du père : adresse adb et lien
 de playlist à demander.
 
+## Style des deux applis télé
+Menu de gauche à petites icônes, inspiré de ZenIPTV (demande de l'utilisateur, octobre 2026) :
+`NavRail` dans `ui/Widgets.kt` de chaque appli. GégéTV : sélecteur = liseré rouge seulement (les
+éléments gardent leurs couleurs). Sur la Philips, le clavier à l'écran s'ouvre dès qu'un champ de
+saisie reçoit le sélecteur et capte les flèches : piloter pas à pas, fermer le clavier avec Retour.
+
 ## Règles de travail
 - Ne jamais écrire dans le dépôt, un message, une capture ou un journal : clé API, mots de passe,
   adresses de flux IPTV (elles contiennent identifiant et mot de passe).
