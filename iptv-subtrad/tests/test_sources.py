@@ -151,8 +151,11 @@ def test_credentials_are_stored_privately_and_survive_a_restart(tmp_path, xtream
 
     again = make_app(tmp_path)  # redémarrage : relit le disque, sans réseau
     assert [s["name"] for s in again.public_sources()] == ["Maison", "Clé USB"]
-    assert again.library.search("")["total"] == 3
-    assert again.library.search("", source="Clé USB")["items"][0]["name"] == "Les Visiteurs"
+    assert [s["active"] for s in again.public_sources()] == [True, False]  # une seule source utilisée
+    assert again.library.search("")["total"] == 2
+    again.activate_source(again.sources[1].id)
+    assert again.library.search("")["items"][0]["name"] == "Les Visiteurs"
+    assert make_app(tmp_path).public_sources()[1]["active"]  # le choix survit à un redémarrage
 
 
 def test_names_stay_unique_and_remove_deletes_everything(tmp_path):
@@ -182,7 +185,7 @@ def test_refresh_one_source_does_not_break_the_others(tmp_path, xtream_server):
     assert "403" in result["Maison"]["error"] or "refusé" in result["Maison"]["error"]
     assert SECRET not in result["Maison"]["error"] and "get.php" not in result["Maison"]["error"]
     assert result["USB"]["error"] == ""  # un fichier ne se recharge pas : ignoré sans erreur
-    assert app.library.search("")["total"] == 3  # l'ancienne liste de « Maison » reste utilisable
+    assert app.library.search("")["total"] == 2  # l'ancienne liste de « Maison » reste utilisable
     app.sources[0].password = SECRET
     assert app.refresh_sources(app.sources[0].id)[0]["error"] == ""
 
@@ -239,3 +242,52 @@ def test_page_scopes_its_tab_selectors():
     html = resources.files("subtrad").joinpath("gui.html").read_text(encoding="utf-8")
     assert 'querySelectorAll(".tabs button")' not in html
     assert 'id="kind-tabs"' in html and 'id="source-kind"' in html
+
+
+def test_one_source_at_a_time(tmp_path):
+    app = make_app(tmp_path)
+    first = app.add_source("fichier", name="Films", text=PLAYLIST_A)
+    second = app.add_source("fichier", name="USB", text=PLAYLIST_B)
+    assert first["active"] and not second["active"]  # une source ajoutée n'est pas utilisée d'office
+    names = lambda: [i["name"] for i in app.library.search("")["items"]]
+    before = names()
+    assert "Les Visiteurs" not in before
+    assert [s["active"] for s in app.activate_source(second["id"])] == [False, True]
+    assert names() == ["Les Visiteurs"]
+    app.remove_source(second["id"])  # la source utilisée est supprimée : la suivante la remplace
+    assert app.public_sources()[0]["active"] and names() == before
+
+
+def test_tv_manages_sources_without_ever_seeing_the_password(tmp_path, xtream_server):
+    import requests
+
+    from subtrad.tele import TvAccess
+
+    address, _ = xtream_server
+    app = make_app(tmp_path)
+    app.add_source("fichier", name="USB", text=PLAYLIST_B)
+    app.settings.update(tele="on")
+    app.tv = TvAccess(app, port=0, host="127.0.0.1")
+    app.apply_tv()
+    base = f"http://{app.tv_status()['address']}/tele/api"
+    session = requests.Session()
+    session.trust_env = False
+    session.headers["X-Subtrad-Code"] = app.settings.tv_code()
+    try:
+        refused = session.post(base + "/sources/add", json={"name": "Maison", "server": address,
+                                                            "username": "jean", "password": "mauvais"})
+        assert refused.status_code == 400 and len(app.sources) == 1
+        added = session.post(base + "/sources/add", json={"name": "Maison", "server": address,
+                                                          "username": "jean", "password": SECRET}).json()
+        assert added["name"] == "Maison" and not added["active"]
+        listed = session.get(base + "/sources").json()
+        assert [s["name"] for s in listed] == ["USB", "Maison"]
+        used = session.post(base + "/sources/activate", json={"id": added["id"]}).json()
+        assert [s["active"] for s in used] == [False, True]
+        assert [i["name"] for i in session.get(base + "/search", params={"q": ""}).json()["items"]] != ["Les Visiteurs"]
+        left = session.post(base + "/sources/delete", json={"id": added["id"]}).json()
+        assert [(s["name"], s["active"]) for s in left] == [("USB", True)]
+        everything = json.dumps([refused.json(), added, listed, used, left])
+        assert SECRET not in everything and "jean" not in everything
+    finally:
+        app.tv.stop()

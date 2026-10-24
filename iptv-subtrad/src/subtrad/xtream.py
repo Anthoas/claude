@@ -267,6 +267,12 @@ class Catalog:
         finally:
             self._refreshing = False
 
+    def reset(self) -> None:
+        """Autre source (autre compte) : on oublie le catalogue, il sera redemandé au besoin."""
+        with self._lock:
+            self._data, self._loaded_at, self._info, self._index_for = None, 0.0, {}, None
+        (self.directory / "catalog.json").unlink(missing_ok=True)
+
     def refresh_now(self) -> None:
         data = self._fetch_all()
         with self._lock:

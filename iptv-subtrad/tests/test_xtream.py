@@ -332,6 +332,8 @@ def test_xtream_account_comes_from_the_sources(tmp_path):
     app.sources = [build_source("fichier", "Fichier", slot=0)]
     assert app._xtream_client() is None  # un fichier n'a pas de compte
     app.sources.append(build_source("m3u", "Lien", slot=1, url=SOURCE))
+    assert app._xtream_client() is None  # la source utilisée (la première) n'a pas de compte
+    app.settings.update(active_source=app.sources[1].id)
     account = app._xtream_client().account
     assert (account.base, account.username, account.password) == ("http://portal.example:8080", "MONUSER", "MONMDP")
     app.sources = [build_source("xtream", "Serveur", slot=2, server="portal.example:8080",

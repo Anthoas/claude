@@ -157,6 +157,18 @@ class _TvHandler(BaseHTTPRequestHandler):
                 return self._json(app.forget(int(params["id"])))
             if (method, path) == ("POST", "/tele/api/cancel"):
                 return self._json(app.cancel_for_tv(str(params["id"])))
+            # Sources (comptes Xtream Codes) : la réponse ne contient jamais identifiant ni mot de passe.
+            if (method, path) == ("GET", "/tele/api/sources"):
+                return self._json(app.public_sources())
+            if (method, path) == ("POST", "/tele/api/sources/add"):
+                return self._json(app.add_source("xtream", str(params.get("name", "")), server=str(params.get("server", "")),
+                                                 username=str(params.get("username", "")),
+                                                 password=str(params.get("password", ""))))
+            if (method, path) == ("POST", "/tele/api/sources/activate"):
+                return self._json(app.activate_source(str(params["id"])))
+            if (method, path) == ("POST", "/tele/api/sources/delete"):
+                app.remove_source(str(params["id"]))
+                return self._json(app.public_sources())
             return self._json({"error": "Introuvable."}, 404)
         except KeyError as exc:
             return self._json({"error": friendly_error(exc).strip("'\"")}, 404)

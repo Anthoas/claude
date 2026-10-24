@@ -48,6 +48,7 @@
   .tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .tabs button { border: 0; border-radius: 0; background: var(--panel); }
   .tabs button[aria-pressed=true] { background: var(--accent); color: var(--accent-text); }
+  #settings-tabs { margin-bottom: 6px; }
   #group { max-width: 260px; }
   #count { margin: 6px 2px 10px; }
 
@@ -268,6 +269,12 @@
 
 <dialog id="settings">
   <h2>Réglages</h2>
+  <div class="tabs" id="settings-tabs" role="group" aria-label="Rubriques des réglages">
+    <button type="button" data-pane="traduction" aria-pressed="true">Traduction</button>
+    <button type="button" data-pane="lecture" aria-pressed="false">Lecture et télé</button>
+    <button type="button" data-pane="sources" aria-pressed="false">Sources</button>
+  </div>
+  <section data-pane="traduction">
   <label for="api-key">Clé Claude (API)</label>
   <input id="api-key" type="password" autocomplete="off" placeholder="sk-ant-…">
   <div id="api-key-hint" class="hint"></div>
@@ -281,10 +288,6 @@
   <select id="vers">
     <option value="id">Indonésien</option><option value="en">Anglais</option><option value="fr">Français</option>
   </select>
-  <label for="lecteur">Lecteur vidéo</label>
-  <select id="lecteur"></select>
-  <div class="hint">VLC attend que toute la traduction soit prête ; mpv démarre au bout de
-    quelques secondes et reçoit la suite des sous-titres pendant la lecture.</div>
   <label for="whisper">Si une vidéo n'a pas de sous-titres</label>
   <select id="whisper">
     <option value="on">Transcrire la voix (Whisper, sur ce Mac)</option>
@@ -294,6 +297,12 @@
   <label for="tmdb-key">Clé TMDB (titres et résumés des épisodes)</label>
   <input id="tmdb-key" type="password" autocomplete="off" placeholder="clé d'API de themoviedb.org">
   <div id="tmdb-hint" class="hint"></div>
+  </section>
+  <section data-pane="lecture" class="hidden">
+  <label for="lecteur">Lecteur vidéo</label>
+  <select id="lecteur"></select>
+  <div class="hint">VLC attend que toute la traduction soit prête ; mpv démarre au bout de
+    quelques secondes et reçoit la suite des sous-titres pendant la lecture.</div>
   <label for="tele">Regarder sur la télé</label>
   <select id="tele">
     <option value="off">Désactivé</option>
@@ -301,9 +310,13 @@
   </select>
   <div id="tele-hint" class="hint"></div>
   <button id="new-tele-code" type="button" class="hidden">Changer le code de la télé</button>
-  <label>Sources</label>
+  </section>
+  <section data-pane="sources" class="hidden">
+  <p class="hint">Une seule source est utilisée à la fois : seules ses vidéos apparaissent. Les autres
+    restent enregistrées, prêtes à être reprises.</p>
   <div id="source-list"></div>
   <button id="add-source" type="button">+ Ajouter une source…</button>
+  </section>
   <div class="buttons">
     <button id="cancel-settings" type="button">Annuler</button>
     <button id="save-settings" class="primary" type="button">Enregistrer</button>
@@ -364,13 +377,13 @@ async function showBrowse(s) {
   $("#setup").classList.add("hidden");
   $("#browse").classList.remove("hidden");
   $("#refresh").classList.toggle("hidden", !s.sources.some((x) => x.refreshable));
+  // Plusieurs sources : ce menu change la source utilisée (une seule à la fois).
   const multiple = s.sources.length > 1;
   const filter = $("#source-filter");
   filter.classList.toggle("hidden", !multiple);
-  filter.replaceChildren(el("option", { value: "", textContent: "Toutes les sources" }),
-    ...s.sources.map((x) => el("option", { value: x.name, textContent: `${x.name} (${fmt(x.count)})` })));
-  if (s.sources.some((x) => x.name === state.source)) filter.value = state.source;
-  else state.source = "";
+  filter.replaceChildren(...s.sources.map((x) =>
+    el("option", { value: x.id, textContent: `Source : ${x.name} (${fmt(x.count)})`, selected: x.active })));
+  state.source = "";
   for (const btn of document.querySelectorAll("#kind-tabs button")) {
     if (btn.dataset.kind === "ready") continue; // pas de nombre : la liste vient du Mac à la demande
     const n = btn.dataset.kind ? s.kinds[btn.dataset.kind] : s.count;
@@ -391,9 +404,11 @@ async function reloadState() {
 
 $("#setup-add").addEventListener("click", openSourceDialog);
 $("#source-filter").addEventListener("change", async () => {
-  state.source = $("#source-filter").value;
-  await loadGroups();
-  search();
+  const filter = $("#source-filter");
+  filter.disabled = true;
+  try { await api("/api/sources/activate", { id: filter.value }); await showBrowse(await reloadState()); }
+  catch (e) { alert(e.message); }
+  finally { filter.disabled = false; }
 });
 $("#refresh").addEventListener("click", async () => {
   const btn = $("#refresh");
@@ -476,6 +491,18 @@ function renderSourceList() {
     const info = el("div", {}, el("div", { className: "name", textContent: src.name }), meta);
     if (src.error) info.append(el("div", { className: "meta error", textContent: `Dernière actualisation échouée : ${src.error}` }));
     const buttons = el("div", { className: "buttons" });
+    if (src.active) {
+      info.querySelector(".name").append(el("span", { className: "badge", textContent: " ● Utilisée" }));
+    } else {
+      const use = el("button", { type: "button", textContent: "Utiliser" });
+      use.addEventListener("click", async () => {
+        use.disabled = true; use.textContent = "…";
+        try { await api("/api/sources/activate", { id: src.id }); await showBrowse(await reloadState()); }
+        catch (e) { alert(e.message); }
+        renderSourceList();
+      });
+      buttons.append(use);
+    }
     if (src.refreshable) {
       const refresh = el("button", { type: "button", textContent: "Actualiser" });
       refresh.addEventListener("click", async () => {
@@ -1066,12 +1093,21 @@ function openSettings() {
   $("#depuis").value = s.depuis;
   $("#vers").value = s.vers;
   renderSourceList();
+  showSettingsPane("traduction");
   $("#api-key").value = "";
   $("#api-key-hint").textContent = s.has_api_key
     ? (s.api_key_from_env ? "Clé trouvée dans la configuration du Terminal. Laisse vide pour la garder."
                           : "Une clé est enregistrée. Laisse vide pour la garder.")
     : "Aucune clé : crée-la sur console.anthropic.com (rubrique API Keys) et colle-la ici.";
   $("#settings").showModal();
+}
+
+function showSettingsPane(name) {
+  for (const btn of document.querySelectorAll("#settings-tabs button")) btn.setAttribute("aria-pressed", btn.dataset.pane === name);
+  for (const pane of document.querySelectorAll("#settings section[data-pane]")) pane.classList.toggle("hidden", pane.dataset.pane !== name);
+}
+for (const btn of document.querySelectorAll("#settings-tabs button")) {
+  btn.addEventListener("click", () => showSettingsPane(btn.dataset.pane));
 }
 
 function showTele(s) {

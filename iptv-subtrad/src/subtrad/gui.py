@@ -74,7 +74,7 @@ class Settings:
     """Réglages enregistrés sur ce Mac uniquement (le lien M3U contient souvent un mot de
     passe et la clé Claude en est un) : fichier lisible par l'utilisateur seul."""
 
-    DEFAULTS = {"playlist_source": "", "sources": [], "next_slot": 0, "api_key": "",
+    DEFAULTS = {"playlist_source": "", "sources": [], "active_source": "", "next_slot": 0, "api_key": "",
                 "model": DEFAULT_MODEL, "depuis": "fr", "vers": "id", "lecteur": "vlc",
                 "whisper": "on", "tele": "off", "tele_code": "", "tmdb_key": ""}
     CHOICES = {"lecteur": set(PLAYERS), "whisper": {"on", "off"}, "model": set(MODELS),
@@ -139,6 +139,13 @@ class Library:
         self.entries: list[tuple[int, Channel]] = []  # (numéro stable, vidéo), recréée à chaque changement
         self._haystacks: list[str] = []
         self._index: dict[int, Channel] = {}
+        self._only: int | None = None  # seule source visible (None : toutes)
+
+    def show_only(self, slot: int | None) -> None:
+        """N'affiche (recherche, listes, numéros) que les vidéos de cette source."""
+        with self._lock:
+            self._only = slot
+            self._rebuild()
 
     def set_source(self, slot: int, channels: list[Channel]) -> int:
         with self._lock:
@@ -157,6 +164,8 @@ class Library:
     def _rebuild(self) -> None:
         ids, channels = [], []
         for slot in sorted(self._parts):
+            if self._only is not None and slot != self._only:
+                continue
             for rank, channel in enumerate(self._parts[slot]):
                 ids.append(slot * SLOT_SIZE + rank)
                 channels.append(channel)
@@ -337,6 +346,26 @@ class GuiApp:
             if path.exists():
                 text = path.read_text(encoding="utf-8", errors="replace")
                 source.count = self.library.set_source(source.slot, parse_m3u(text, source.name))
+        self._show_active()
+
+    def active_source(self) -> Source | None:
+        """La source utilisée (une seule à la fois) : celle choisie, sinon la première."""
+        chosen = self.settings["active_source"]
+        return next((s for s in self.sources if s.id == chosen), self.sources[0] if self.sources else None)
+
+    def _show_active(self) -> None:
+        active = self.active_source()
+        self.library.show_only(active.slot if active else None)
+
+    def activate_source(self, source_id: str) -> list[dict]:
+        """Change de source : ses vidéos, et le catalogue (affiches, séries) de son compte."""
+        source = self._find_source(source_id)
+        self.settings.update(active_source=source.id)
+        self._show_active()
+        catalog = getattr(self, "catalog", None)
+        if catalog is not None:
+            catalog.reset()
+        return self.public_sources()
 
     def _next_slot(self) -> int:
         slot = max(self.settings["next_slot"], 1 + max((s.slot for s in self.sources), default=-1))
@@ -344,7 +373,8 @@ class GuiApp:
         return slot
 
     def public_sources(self) -> list[dict]:
-        return [src.public() for src in self.sources]
+        active = self.active_source()
+        return [{**src.public(), "active": src is active} for src in self.sources]
 
     def _find_source(self, source_id: str) -> Source:
         for source in self.sources:
@@ -379,14 +409,20 @@ class GuiApp:
         self._load_source(source, text or None)  # lève une erreur si ça ne marche pas
         self.sources.append(source)
         self._save_sources()
-        return source.public()
+        self._show_active()  # la nouvelle source n'est pas utilisée d'office (sauf si c'est la seule)
+        return {**source.public(), "active": source is self.active_source()}
 
     def remove_source(self, source_id: str) -> dict:
         source = self._find_source(source_id)
+        was_active = source is self.active_source()
         self.sources.remove(source)
         self.library.remove_source(source.slot)
         self._cache_file(source).unlink(missing_ok=True)
         self._save_sources()
+        if was_active:  # la suivante devient la source utilisée
+            self.settings.update(active_source=self.sources[0].id if self.sources else "")
+            self.catalog.reset()
+        self._show_active()
         return {"removed": source_id}
 
     def refresh_sources(self, source_id: str = "") -> list[dict]:
@@ -408,6 +444,7 @@ class GuiApp:
             added = self.add_source("m3u", "Playlist", url=source)
         else:
             added = self.add_source("fichier", "Playlist", text=text)
+        self.activate_source(added["id"])  # comme avant : la playlist chargée est celle qu'on voit
         return {"count": added["count"]}
 
     # --- mémoire par vidéo ---
@@ -480,17 +517,15 @@ class GuiApp:
         return TmdbClient(key) if key else None
 
     def _xtream_client(self) -> XtreamClient | None:
-        """Le compte Xtream de la première source qui en a un : serveur + identifiant, ou lien
-        « get.php?username=…&password=… »."""
-        for source in self.sources:
-            account = None
-            if source.kind == "xtream":
-                account = XtreamAccount(normalize_server(source.server), source.username, source.password)
-            elif source.kind == "m3u":
-                account = XtreamAccount.from_playlist_source(source.url)
-            if account:
-                return XtreamClient(account)
-        return None
+        """Le compte Xtream de la source utilisée : serveur + identifiant, ou lien
+        « get.php?username=…&password=… » (None : pas de catalogue pour cette source)."""
+        source = self.active_source()
+        account = None
+        if source is not None and source.kind == "xtream":
+            account = XtreamAccount(normalize_server(source.server), source.username, source.password)
+        elif source is not None and source.kind == "m3u":
+            account = XtreamAccount.from_playlist_source(source.url)
+        return XtreamClient(account) if account else None
 
     def video_ready(self, index: int) -> bool:
         return self.is_ready(self.library.get(index))
@@ -940,6 +975,8 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._json(app.add_source(**{k: str(params.get(k, "")) for k in fields}))
             if (method, path) == ("POST", "/api/sources/delete"):
                 return self._json(app.remove_source(str(params["id"])))
+            if (method, path) == ("POST", "/api/sources/activate"):
+                return self._json(app.activate_source(str(params["id"])))
             if (method, path) == ("POST", "/api/sources/refresh"):
                 return self._json(app.refresh_sources(str(params.get("id", ""))))
             if (method, path) == ("POST", "/api/settings"):
