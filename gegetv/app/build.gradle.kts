@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -14,6 +16,18 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        // Source déjà prête dans l'appli (pour l'installer sur une télé sans Mac à côté) : lue dans
+        // gegetv/source-preinstallee.properties (nom, serveur, identifiant, mot de passe), fichier
+        // privé, jamais dans le dépôt. Sans ce fichier : aucune source préinstallée.
+        val preset = Properties().apply {
+            rootProject.file("source-preinstallee.properties").takeIf { it.exists() }?.reader(Charsets.UTF_8)?.use { load(it) }
+        }
+        fun quoted(key: String) = "\"" + preset.getProperty(key, "").replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        buildConfigField("String", "PRESET_NAME", quoted("nom"))
+        buildConfigField("String", "PRESET_SERVER", quoted("serveur"))
+        buildConfigField("String", "PRESET_USERNAME", quoted("identifiant"))
+        buildConfigField("String", "PRESET_PASSWORD", quoted("mot_de_passe"))
     }
 
     buildTypes {
@@ -32,6 +46,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

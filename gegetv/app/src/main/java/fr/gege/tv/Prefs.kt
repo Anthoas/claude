@@ -38,6 +38,21 @@ class Prefs(private val context: Context) {
         if (favorites.load().isEmpty() && legacyFavorites.isNotEmpty()) favorites.save(legacyFavorites)
     }
 
+    /**
+     * Source préinstallée dans cette version de l'appli (voir `source-preinstallee.properties`) :
+     * ajoutée et utilisée au premier lancement, une seule fois (supprimée ensuite, elle ne revient pas).
+     */
+    fun applyPreset() {
+        val server = BuildConfig.PRESET_SERVER
+        if (server.isBlank() || prefs.getBoolean("preset_done", false)) return
+        val source = Source.new(BuildConfig.PRESET_NAME.ifBlank { "Ma source" }, server,
+                                BuildConfig.PRESET_USERNAME, BuildConfig.PRESET_PASSWORD)
+        val same = sources.sources.firstOrNull { it.server == source.server && it.username == source.username }
+        if (same == null) sources.add(source)
+        sources.activeId = (same ?: source).id
+        prefs.edit().putBoolean("preset_done", true).commit()
+    }
+
     /** Lien `get.php` donné par un ordinateur (adb) : ajouté comme source et utilisé. */
     fun provision(link: String) {
         val source = Source.fromPlaylistLink(link, "Source ${sources.sources.size + 1}") ?: return

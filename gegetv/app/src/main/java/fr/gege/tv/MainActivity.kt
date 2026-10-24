@@ -16,6 +16,7 @@ class MainActivity : ComponentActivity() {
         val prefs = Prefs(this)
         val store = ChannelStore(this)
         prefs.migrate(store)
+        prefs.applyPreset()
         // Réglage depuis un ordinateur, pour ne pas taper la source à la télécommande :
         // adb shell am start -S -n fr.gege.tv/.MainActivity --es playlist LIEN_GET_PHP
         intent?.getStringExtra("playlist")?.takeIf { it.startsWith("http") }?.let { prefs.provision(it) }

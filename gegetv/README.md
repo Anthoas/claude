@@ -78,3 +78,21 @@ adb -s ADRESSE:5555 install -r app/build/outputs/apk/release/app-release.apk
 # lien de la playlist sans le taper à la télécommande :
 adb -s ADRESSE:5555 shell am start -S -n fr.gege.tv/.MainActivity --es playlist "'LIEN'"
 ```
+
+## Version avec une source déjà prête (télé sans Mac à côté)
+
+Pour installer GégéTV chez quelqu'un sans pouvoir taper la source sur place : créer le fichier privé
+`gegetv/source-preinstallee.properties` (ignoré par git, jamais dans le dépôt) :
+
+```
+nom=Gérard
+serveur=http://serveur:port
+identifiant=…
+mot_de_passe=…
+```
+
+puis compiler : au premier lancement, l'appli ajoute cette source et l'utilise (une seule fois ; si
+on la supprime, elle ne revient pas). Retirer le fichier ensuite, sinon toutes les versions compilées
+l'emportent. Le fichier de la source « Gérard » est gardé hors du dépôt dans
+`~/.config/gegetv/source-gerard.properties`.
+

@@ -91,8 +91,10 @@ confirmée à l'œil sur la Philips (Subtrad TV avec sous-titres indonésiens, G
 octobre 2026) et sur la TCL (les deux applis, HEVC Realtek, 0 image sautée). Les captures d'écran de la Philips
 montrent la vidéo HDR en couleurs fausses (vert/blanc) : ne pas s'y fier. Son clavier à l'écran garde les flèches : Retour le ferme. **Ne pas faire `am force-stop` de l'écran d'accueil
 (Projectivy, `com.spocky.projengmenu`)** : sur la Philips, la télé a redémarré juste après (octobre
-2026). Une nouvelle bannière d'appli n'apparaît qu'après un redémarrage de la télé. Télé du père : adresse adb et lien
-de playlist à demander.
+2026). Une nouvelle bannière d'appli n'apparaît qu'après un redémarrage de la télé. Télé du père : GégéTV avec la source « Gérard »
+préinstallée (`~/Desktop/GegeTV-Gerard.apk`, octobre 2026 ; identifiants dans
+`~/.config/gegetv/source-gerard.properties`, jamais dans le dépôt ; le mot de passe valable est celui
+de ZenIPTV). Son serveur répond 404 à un mauvais mot de passe.
 
 ## Style des deux applis télé
 Menu de gauche à petites icônes, inspiré de ZenIPTV (demande de l'utilisateur, octobre 2026) :
