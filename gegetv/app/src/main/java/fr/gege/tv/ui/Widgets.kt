@@ -173,9 +173,19 @@ fun ProgressBar(fraction: Double?, modifier: Modifier = Modifier) {
 @Composable
 fun ConfirmDialog(question: String, onYes: () -> Unit, onNo: () -> Unit) {
     val no = remember { FocusRequester() }
+    // La fenêtre s'ouvre par un appui long sur OK : la touche est encore enfoncée. Ses répétitions et
+    // son relâchement ne doivent pas valider « Non » ; on attend un nouvel appui sur OK.
+    var armed by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = onNo) {
         Column(
             Modifier
+                .onPreviewKeyEvent { event ->
+                    if (event.key != Key.DirectionCenter && event.key != Key.Enter && event.key != Key.NumPadEnter) {
+                        return@onPreviewKeyEvent false
+                    }
+                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) armed = true
+                    !armed
+                }
                 .background(Color(0xFF1F2A22), RoundedCornerShape(16.dp))
                 .border(2.dp, Color(0xFF374151), RoundedCornerShape(16.dp))
                 .padding(36.dp)
