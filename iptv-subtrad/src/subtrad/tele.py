@@ -165,24 +165,13 @@ class _TvHandler(BaseHTTPRequestHandler):
 
 
     def _catalog(self, method: str, path: str, params: dict) -> None:
-        """Catalogue Xtream Codes : séries par saison, films, affiches (voir xtream.py)."""
-        app, catalog = self.app, self.app.catalog
-        lang = params.get("lang", "FR")
-        page = {"category": params.get("category", ""), "query": params.get("q", ""), "lang": lang,
-                "offset": int(params.get("offset", 0)), "limit": min(int(params.get("limit", 60)), 200)}
-        if (method, path) == ("GET", "/tele/api/catalog"):
-            return self._json({"available": catalog.available()})
-        if (method, path) == ("GET", "/tele/api/catalog/categories"):
-            return self._json(catalog.categories(params.get("type", "series"), lang))
-        if (method, path) == ("GET", "/tele/api/catalog/series"):
-            return self._json(catalog.series(**page))
-        if (method, path) == ("GET", "/tele/api/catalog/series/info"):
-            return self._json(catalog.series_detail(int(params["id"]), app.video_status))
-        if (method, path) == ("GET", "/tele/api/catalog/movies"):
-            return self._json(catalog.movies(**page, status=app.video_status))
-        if (method, path) == ("GET", "/tele/api/catalog/movie"):
-            return self._json(catalog.movie_detail(int(params["id"]), app.video_status))
-        return self._json({"error": "Introuvable."}, 404)
+        """Catalogue Xtream Codes : séries par saison, films, affiches (voir GuiApp.catalog_request)."""
+        if method != "GET":
+            return self._json({"error": "Introuvable."}, 404)
+        try:
+            return self._json(self.app.catalog_request(path[len("/tele/api/catalog"):], params))
+        except LookupError:
+            return self._json({"error": "Introuvable."}, 404)
 
 
 class TvAccess:

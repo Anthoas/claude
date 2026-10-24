@@ -8,7 +8,7 @@ import pytest
 import requests
 
 from subtrad.cache import TranslationCache
-from subtrad.gui import GuiApp, Settings
+from subtrad.gui import GuiApp, Settings, make_server
 from subtrad.playlist import parse_m3u
 from subtrad.store import VideoStore
 from subtrad.subtitles import Cue
@@ -352,3 +352,42 @@ def test_catalog_uses_stable_video_numbers_of_any_source(tmp_path):
     assert first["id"] == 5 * SLOT_SIZE  # S01E01 = 1re vidéo de la source n° 5
     assert library.get(first["id"]).url.endswith("/1001.mkv")
     assert catalog.movies()["items"][0]["id"] == 5 * SLOT_SIZE + 3
+
+
+def test_mac_page_has_the_catalog_prepare_and_french_playback(tmp_path):
+    from test_gui import FakePlayer
+
+    app = GuiApp(Settings(tmp_path / "config"), tmp_path / "cache" / "playlist.m3u",
+                 translator_factory=lambda s: FakeTranslator(), player_factory=FakePlayer,
+                 cache_factory=lambda: TranslationCache(":memory:"),
+                 whisper_backend=lambda: None, store=VideoStore(tmp_path / "videos"))
+    app.load_playlist(text=PLAYLIST)
+    fake = FakeXtream()
+    app.catalog = Catalog(lambda: fake, lambda: app.library.entries, tmp_path / "xtream")
+    srv, token = make_server(app, port=0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    page = f"http://127.0.0.1:{srv.server_address[1]}"
+    session = requests.Session()
+    session.trust_env = False
+    session.headers["X-Subtrad-Token"] = token
+    try:
+        assert session.get(page + "/api/catalog").json() == {"available": True}
+        detail = session.get(page + "/api/catalog/series/info", params={"id": 77}).json()
+        assert detail["seasons"][0]["episodes"][0]["id"] == 0
+        assert session.get(page + "/api/catalog/nimporte").status_code == 404
+        assert session.get(page + "/api/ready").json()["total"] == 0
+        assert session.get(page + "/api/video", params={"id": 0}).json()["ready"] is False
+        # Regarder en français : la vidéo s'ouvre sans sous-titres.
+        FakePlayer.started.clear()
+        job = session.post(page + "/api/play_original", json={"id": 3}).json()
+        for _ in range(50):
+            if FakePlayer.started:
+                break
+            time.sleep(0.02)
+        assert FakePlayer.started[-1][1] is None  # aucun fichier de sous-titres
+        assert job["state"] in ("playing", "done")  # (le faux lecteur se ferme tout de suite)
+        # Sans le jeton de la page : refusé.
+        assert requests.Session().get(page + "/api/catalog").status_code == 403
+    finally:
+        srv.shutdown()
+        srv.server_close()

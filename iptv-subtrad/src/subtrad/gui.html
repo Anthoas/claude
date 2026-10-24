@@ -23,7 +23,7 @@
   header h1 { margin: 0; font-size: 18px; font-weight: 650; }
   header .sub { color: var(--muted); font-size: 13px; }
   header .spacer { flex: 1; }
-  main { max-width: 1000px; margin: 0 auto; padding: 20px 16px 140px; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 140px; }
   button, select, input { font: inherit; color: inherit; }
   button { cursor: pointer; border: 1px solid var(--line); background: var(--panel-2);
            border-radius: 8px; padding: 7px 12px; }
@@ -95,6 +95,47 @@
   @keyframes slide { from { margin-left: 0; } to { margin-left: 65%; } }
   .phase { font-size: 12px; color: var(--muted); }
 
+  /* --- Catalogue : affiches, séries, fiches (comme sur la télé) --- */
+  .recent, .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 4px 0 10px; }
+  .chip { padding: 4px 11px; border-radius: 99px; font-size: 13px; }
+  .chip[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 18px 14px; }
+  .poster { padding: 0; border: 0; background: none; text-align: left; border-radius: var(--radius); }
+  .poster .cover { position: relative; aspect-ratio: 2 / 3; border-radius: var(--radius); overflow: hidden;
+                   background: var(--panel-2); border: 2px solid transparent; }
+  .poster:hover .cover, .poster:focus-visible .cover { border-color: var(--accent); }
+  .poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .poster .noimg { padding: 10px; font-weight: 600; }
+  .pbadge { position: absolute; top: 6px; right: 6px; font-size: 12px; padding: 1px 7px; border-radius: 6px;
+            background: rgba(17, 21, 28, .85); color: #fff; }
+  .pbar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(0,0,0,.4); }
+  .pbar > div { height: 100%; background: var(--accent); }
+  .pname { font-weight: 600; font-size: 14px; margin-top: 6px; overflow: hidden; display: -webkit-box;
+           -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .pmeta { font-size: 12px; }
+  .series-head { display: grid; grid-template-columns: 170px 1fr; gap: 24px; margin: 10px 0 16px; }
+  .series-head img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--radius); }
+  .series-head h2 { margin: 0 0 6px; }
+  .series-head p { margin: 8px 0 0; }
+  .episodes { display: grid; gap: 8px; }
+  .episode { display: grid; grid-template-columns: 180px 1fr auto; gap: 14px; align-items: center; text-align: left;
+             padding: 8px; background: var(--panel); }
+  .episode .thumb { position: relative; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: var(--panel-2); }
+  .episode .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .episode .ename { font-weight: 600; }
+  .episode .badges { text-align: right; font-size: 13px; }
+  .tr { color: var(--accent); }
+  dialog.sheet { width: min(980px, calc(100vw - 32px)); }
+  .sheet-head { display: grid; grid-template-columns: 45% 1fr; gap: 24px; align-items: center; }
+  .sheet-head.poster-like { grid-template-columns: 180px 1fr; }
+  .sheet-head img { width: 100%; border-radius: var(--radius); object-fit: cover; aspect-ratio: 16 / 9; }
+  .sheet-head.poster-like img { aspect-ratio: 2 / 3; }
+  .sheet-head.text-only { grid-template-columns: 1fr; }
+  .sheet-head h2 { margin: 2px 0; }
+  .sheet-head p { margin: 8px 0 0; max-height: 9.5em; overflow: auto; }
+  .sheet-buttons { justify-content: flex-start !important; flex-wrap: wrap; }
+  #sheet-status { margin-top: 12px; }
+  @media (max-width: 700px) { .sheet-head, .series-head, .episode { grid-template-columns: 1fr; } }
   dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
            color: var(--text); width: min(520px, calc(100vw - 32px)); padding: 20px; }
   dialog::backdrop { background: rgba(0,0,0,.5); }
@@ -133,11 +174,14 @@
   </section>
 
   <section id="browse" class="hidden">
+   <div id="browse-top">
     <div class="toolbar">
       <input id="q" type="search" placeholder="Rechercher une chaîne, un film, une série…" autocomplete="off">
     </div>
+    <div id="recent" class="recent hidden"></div>
     <div class="toolbar">
       <div class="tabs" id="kind-tabs" role="group" aria-label="Type">
+        <button data-kind="ready" aria-pressed="false">Prêtes à regarder</button>
         <button data-kind="" aria-pressed="true">Tout</button>
         <button data-kind="direct" aria-pressed="false">Direct</button>
         <button data-kind="film" aria-pressed="false">Films</button>
@@ -146,13 +190,48 @@
       <select id="source-filter" class="hidden" aria-label="Source"><option value="">Toutes les sources</option></select>
       <select id="group" aria-label="Catégorie"><option value="">Toutes les catégories</option></select>
     </div>
-    <p id="count" class="muted"></p>
-    <ul id="list"></ul>
-    <button id="more" class="hidden">Afficher plus</button>
+   </div>
+    <div id="list-view">
+      <p id="count" class="muted"></p>
+      <ul id="list"></ul>
+      <button id="more" class="hidden">Afficher plus</button>
+    </div>
+    <div id="grid-view" class="hidden">
+      <div id="cats" class="chips"></div>
+      <p id="grid-count" class="muted"></p>
+      <div id="grid" class="grid"></div>
+      <button id="grid-more" class="hidden" style="display:block;margin:18px auto 0">Afficher plus</button>
+    </div>
+    <div id="series-page" class="hidden">
+      <button id="series-back">← Retour</button>
+      <div id="series-head" class="series-head"></div>
+      <div id="seasons" class="chips"></div>
+      <div id="episodes" class="episodes"></div>
+    </div>
   </section>
 </main>
 
 <div id="jobs" aria-live="polite"></div>
+
+<dialog id="sheet" class="sheet">
+  <div id="sheet-head" class="sheet-head">
+    <img id="sheet-img" alt="">
+    <div>
+      <div id="sheet-series" class="muted"></div>
+      <h2 id="sheet-title"></h2>
+      <div id="sheet-tr" class="tr"></div>
+      <div id="sheet-meta" class="muted"></div>
+      <p id="sheet-plot"></p>
+    </div>
+  </div>
+  <div class="buttons sheet-buttons">
+    <button id="sheet-main" class="primary" type="button">Préparer la traduction</button>
+    <button id="sheet-fr" type="button">Regarder en français</button>
+    <button id="sheet-back" type="button">Retour</button>
+    <button id="sheet-del" type="button" class="hidden">Supprimer</button>
+  </div>
+  <div id="sheet-status" class="muted"></div>
+</dialog>
 
 <dialog id="source-dialog">
   <h2>Ajouter une source</h2>
@@ -293,12 +372,15 @@ async function showBrowse(s) {
   if (s.sources.some((x) => x.name === state.source)) filter.value = state.source;
   else state.source = "";
   for (const btn of document.querySelectorAll("#kind-tabs button")) {
+    if (btn.dataset.kind === "ready") continue; // pas de nombre : la liste vient du Mac à la demande
     const n = btn.dataset.kind ? s.kinds[btn.dataset.kind] : s.count;
     btn.textContent = `${btn.textContent.split(" (")[0]} (${fmt(n)})`;
     btn.disabled = !n;
   }
+  try { cat.available = (await api("/api/catalog")).available; } catch { cat.available = false; }
+  renderRecent();
   await loadGroups();
-  await search();
+  await runSearch();
   $("#q").focus();
 }
 
@@ -532,21 +614,360 @@ async function watchItem(item, button) {
   }
 }
 
-let debounce;
+let debounce, rememberTimer;
 $("#q").addEventListener("input", () => {
   clearTimeout(debounce);
-  debounce = setTimeout(() => { state.q = $("#q").value; search(); }, 150);
+  clearTimeout(rememberTimer);
+  debounce = setTimeout(() => { state.q = $("#q").value; runSearch(); }, gridMode() ? 300 : 150);
+  rememberTimer = setTimeout(() => rememberSearch($("#q").value), 1500); // recherche « finie »
 });
+$("#q").addEventListener("keydown", (e) => { if (e.key === "Enter") rememberSearch($("#q").value); });
 for (const btn of document.querySelectorAll("#kind-tabs button")) {
   btn.addEventListener("click", async () => {
     for (const b of document.querySelectorAll("#kind-tabs button")) b.setAttribute("aria-pressed", b === btn);
     state.kind = btn.dataset.kind;
-    await loadGroups();
-    search();
+    if (state.kind !== "ready" && !gridMode()) await loadGroups();
+    runSearch();
   });
 }
 $("#group").addEventListener("change", () => { state.group = $("#group").value; search(); });
 $("#more").addEventListener("click", () => search(true));
+
+// --- Catalogue : affiches, séries par saison, fiches (comme sur la télé) ----------
+
+const cat = { available: false, type: "", category: "", cats: [], items: [], total: 0, seq: 0, loading: false };
+const RECENT_KEY = "subtrad.recent";
+
+function recentSearches() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; }
+}
+function rememberSearch(q) {
+  q = q.trim();
+  if (q.length < 3) return;
+  const list = [q, ...recentSearches().filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 6);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* navigateur privé */ }
+  renderRecent();
+}
+function renderRecent() {
+  const list = recentSearches();
+  $("#recent").classList.toggle("hidden", !list.length);
+  $("#recent").replaceChildren(el("span", { className: "muted", textContent: "Recherches récentes :" }),
+    ...list.map((q) => {
+      const b = el("button", { className: "chip", textContent: q });
+      b.addEventListener("click", () => { $("#q").value = q; state.q = q; runSearch(); });
+      return b;
+    }));
+}
+
+const gridMode = () => cat.available && (state.kind === "film" || state.kind === "serie");
+
+function showView(view) { // « list », « grid » ou « series »
+  $("#list-view").classList.toggle("hidden", view !== "list");
+  $("#grid-view").classList.toggle("hidden", view !== "grid");
+  $("#series-page").classList.toggle("hidden", view !== "series");
+  $("#browse-top").classList.toggle("hidden", view === "series");
+  $("#group").classList.toggle("hidden", view !== "list" || state.kind === "ready");
+}
+
+async function runSearch() {
+  if (state.kind === "ready") return loadReady();
+  if (gridMode()) return loadGrid(true);
+  showView("list");
+  return search();
+}
+
+// « Prêtes à regarder » : les vidéos traduites, comme sur la télé.
+async function loadReady() {
+  showView("list");
+  const r = await api("/api/ready");
+  const q = state.q.trim().toLowerCase();
+  const items = r.items.filter((x) => !q || x.name.toLowerCase().includes(q));
+  $("#list").replaceChildren(...items.map((item) => {
+    const open = el("button", { className: "primary", textContent: "Ouvrir" });
+    open.addEventListener("click", () => openSheet({ id: item.id, name: item.name }));
+    return el("li", { className: "item" },
+      el("div", { className: "logo", textContent: (item.name.replace(/^(\W*[A-Z]{2,3}\W+)+/, "").trim()[0] || "?").toUpperCase() }),
+      el("div", {}, el("div", { className: "name", textContent: item.name }),
+         el("div", { className: "meta" },
+            el("span", { className: "badge ready", textContent: "✓ Prêt" }),
+            item.watched ? el("span", { className: "badge", textContent: "✓ Vu" }) : null, item.group)),
+      el("div", { className: "actions" }, open));
+  }));
+  $("#count").textContent = items.length ? `${fmt(items.length)} vidéo(s) prête(s)` :
+    "Aucune vidéo prête. Choisis un film ou un épisode, puis « Préparer la traduction ».";
+  $("#more").classList.add("hidden");
+}
+
+async function loadGrid(reset) {
+  showView("grid");
+  const type = state.kind === "film" ? "movie" : "series";
+  if (cat.type !== type) {
+    cat.type = type;
+    cat.category = "";
+    cat.cats = [];
+    api(`/api/catalog/categories?type=${type}`).then((c) => { cat.cats = c; renderChips(); }).catch(() => {});
+    renderChips();
+  }
+  const seq = ++cat.seq;
+  if (reset) { cat.items = []; $("#grid").replaceChildren(); }
+  cat.loading = true;
+  const params = new URLSearchParams({ category: cat.category, q: state.q, offset: cat.items.length, limit: 60 });
+  try {
+    const r = await api(`/api/catalog/${type === "series" ? "series" : "movies"}?${params}`);
+    if (seq !== cat.seq) return;
+    cat.total = r.total;
+    cat.items.push(...r.items);
+    $("#grid").append(...r.items.map(posterCard));
+    $("#grid-count").textContent = r.total ? `${fmt(r.total)} résultat${r.total > 1 ? "s" : ""}` : "Aucun résultat.";
+    $("#grid-more").classList.toggle("hidden", cat.items.length >= r.total);
+  } catch (e) {
+    $("#grid-count").textContent = e.message;
+  } finally {
+    cat.loading = false;
+  }
+}
+
+function renderChips() {
+  $("#cats").replaceChildren(...[{ id: "", name: "Toutes" }, ...cat.cats].map((c) => {
+    const b = el("button", { className: "chip", textContent: c.name });
+    b.setAttribute("aria-pressed", c.id === cat.category);
+    b.addEventListener("click", () => { cat.category = c.id; renderChips(); loadGrid(true); });
+    return b;
+  }));
+}
+
+function posterCard(p) {
+  const cover = el("div", { className: "cover" },
+    p.cover ? el("img", { src: p.cover, alt: "", loading: "lazy", referrerPolicy: "no-referrer" })
+            : el("div", { className: "noimg", textContent: p.name }));
+  const badge = p.watched ? "✓ Vu" : p.ready ? "✓ Prêt" : "";
+  if (badge) cover.append(el("span", { className: "pbadge", textContent: badge }));
+  if (p.progress > 0 && !p.watched) {
+    const fill = el("div");
+    fill.style.width = `${Math.round(p.progress * 100)}%`;
+    cover.append(el("div", { className: "pbar" }, fill));
+  }
+  const card = el("button", { className: "poster", title: p.name }, cover,
+    el("div", { className: "pname", textContent: p.name }),
+    el("div", { className: "pmeta muted", textContent: [p.year, p.rating ? `★ ${p.rating}` : ""].filter(Boolean).join(" · ") }));
+  card.addEventListener("click", () => (p.series_id != null ? openSeries(p) : openSheet({ id: p.id, name: p.name, vodId: p.vod_id })));
+  return card;
+}
+$("#grid-more").addEventListener("click", () => loadGrid(false));
+// La suite de la grille se charge toute seule quand on arrive en bas.
+new IntersectionObserver((entries) => {
+  if (entries.some((e) => e.isIntersecting) && !cat.loading && gridMode()) loadGrid(false);
+}).observe($("#grid-more"));
+
+// --- Page d'une série : saisons et épisodes ---
+
+const series = { id: null, data: null, season: 0, timer: null };
+
+async function openSeries(p) {
+  series.id = p.series_id;
+  series.data = null;
+  showView("series");
+  window.scrollTo(0, 0);
+  $("#series-head").replaceChildren(el("p", { className: "muted", textContent: "Chargement…" }));
+  $("#seasons").replaceChildren();
+  $("#episodes").replaceChildren();
+  await loadSeries(true);
+}
+
+async function loadSeries(first) {
+  const id = series.id;
+  clearTimeout(series.timer);
+  try {
+    const d = await api(`/api/catalog/series/info?id=${id}`);
+    if (id !== series.id) return;
+    series.data = d;
+    if (first) series.season = d.next ? d.next.season : 0;
+    renderSeries();
+    // Titres indonésiens traduits en arrière-plan : on redemande la fiche.
+    if (d.titles_pending) series.timer = setTimeout(() => series.id === id && loadSeries(false), 3000);
+  } catch (e) {
+    $("#series-head").replaceChildren(el("p", { className: "error", textContent: e.message }));
+  }
+}
+
+const episodeTitle = (e) => [`Épisode ${e.episode}`, e.title].filter(Boolean).join(" · ")
+  + (e.title_translated && e.title_translated !== e.title ? ` (${e.title_translated})` : "");
+const seasonLabel = (s) => (s.season === 0 ? s.name || "Épisodes spéciaux" : `Saison ${s.season}`);
+
+function renderSeries() {
+  const d = series.data;
+  const meta = [d.year, d.genre, d.rating ? `★ ${d.rating}` : ""].filter(Boolean).join(" · ");
+  $("#series-head").replaceChildren(
+    d.cover ? el("img", { src: d.cover, alt: "", referrerPolicy: "no-referrer" }) : el("div"),
+    el("div", {}, el("h2", { textContent: d.name }), el("div", { className: "muted", textContent: meta }),
+       el("p", { textContent: d.plot })));
+  $("#seasons").replaceChildren(...d.seasons.map((s, i) => {
+    const b = el("button", { className: "chip", textContent: seasonLabel(s) });
+    b.setAttribute("aria-pressed", i === series.season);
+    b.addEventListener("click", () => { series.season = i; renderSeries(); });
+    return b;
+  }));
+  const season = d.seasons[series.season];
+  $("#episodes").replaceChildren(...(season ? season.episodes : []).map((e) => {
+    const thumb = el("div", { className: "thumb" },
+      e.image ? el("img", { src: e.image, alt: "", loading: "lazy", referrerPolicy: "no-referrer" }) : null);
+    const seen = e.watched ? 1 : e.progress;
+    if (seen > 0) {
+      const fill = el("div");
+      fill.style.width = `${Math.round(seen * 100)}%`;
+      thumb.append(el("div", { className: "pbar" }, fill));
+    }
+    const badges = el("div", { className: "badges" });
+    if (e.ready) badges.append(el("div", { className: "status ok", textContent: "✓ Prêt" }));
+    if (e.watched) badges.append(el("div", { className: "muted", textContent: "✓ Vu" }));
+    else if (e.progress > 0) badges.append(el("div", { className: "muted", textContent: `Vu à ${Math.round(e.progress * 100)} %` }));
+    const row = el("button", { className: "episode", disabled: e.id < 0 }, thumb,
+      el("div", {}, el("div", { className: "ename", textContent: episodeTitle(e) }),
+         el("div", { className: "meta", textContent: e.id < 0 ? "Indisponible"
+           : [e.duration, e.air_date].filter(Boolean).join(" · ") })),
+      badges);
+    row.addEventListener("click", () => openSheet({ id: e.id, name: d.name, episode: e, series: d,
+                                                    seasonText: seasonLabel(season) }));
+    return row;
+  }));
+}
+$("#series-back").addEventListener("click", () => { series.id = null; runSearch(); });
+
+// --- Fiche d'un épisode ou d'un film : les quatre boutons ---
+
+const sheet = { id: null, status: null, job: null, check: null, timer: null, confirmDelete: false };
+
+async function openSheet(o) {
+  Object.assign(sheet, { id: o.id, status: null, job: null, check: null, confirmDelete: false });
+  clearTimeout(sheet.timer);
+  // Rien d'actionnable tant que l'état de cette vidéo n'est pas connu.
+  $("#sheet-main").textContent = "Chargement…";
+  $("#sheet-main").className = "primary";
+  $("#sheet-del").classList.add("hidden");
+  const e = o.episode;
+  $("#sheet-head").classList.toggle("poster-like", !e);
+  const img = $("#sheet-img");
+  const setImage = (src) => {
+    img.src = src || "";
+    img.classList.toggle("hidden", !src);
+    $("#sheet-head").classList.toggle("text-only", !src);
+  };
+  setImage(e ? (e.image_large || e.image) : "");
+  $("#sheet-series").textContent = e ? o.name : "";
+  $("#sheet-title").textContent = e ? [`Épisode ${e.episode}`, e.title].filter(Boolean).join(" · ") : o.name;
+  $("#sheet-tr").textContent = e && e.title_translated && e.title_translated !== e.title ? `(${e.title_translated})` : "";
+  $("#sheet-meta").textContent = e ? [o.seasonText, e.duration, e.air_date, e.rating ? `★ ${e.rating}` : ""].filter(Boolean).join(" · ") : "";
+  $("#sheet-plot").textContent = e ? (e.plot || "") : "";
+  $("#sheet-status").replaceChildren();
+  if (!$("#sheet").open) $("#sheet").showModal();
+  if (o.vodId != null) { // fiche d'un film : affiche, durée, résumé
+    api(`/api/catalog/movie?id=${o.vodId}`).then((m) => {
+      if (sheet.id !== o.id) return;
+      setImage(m.cover);
+      $("#sheet-meta").textContent = [m.year, m.duration, m.genre, m.rating ? `★ ${m.rating}` : ""].filter(Boolean).join(" · ");
+      $("#sheet-plot").textContent = m.plot || "";
+    }).catch(() => {});
+  }
+  if (o.id < 0) {
+    $("#sheet-main").textContent = "Préparer la traduction";
+    for (const b of ["#sheet-main", "#sheet-fr", "#sheet-del"]) $(b).disabled = true;
+    $("#sheet-status").textContent = "Cette vidéo n'est pas dans la playlist.";
+    return;
+  }
+  for (const b of ["#sheet-main", "#sheet-fr", "#sheet-del"]) $(b).disabled = false;
+  await refreshSheet();
+}
+
+async function refreshSheet() {
+  const id = sheet.id;
+  clearTimeout(sheet.timer);
+  try {
+    const [status, jobs] = await Promise.all([api(`/api/video?id=${id}`), api("/api/jobs")]);
+    if (id !== sheet.id) return;
+    const was = sheet.job;
+    sheet.status = status;
+    sheet.job = jobs.find((j) => j.channel_id === id && j.target === "tele" && j.state === "running")
+      || (was ? jobs.find((j) => j.id === was.id) : null) || null;
+    if (was && was.state === "running" && sheet.job && sheet.job.state !== "running") afterPreparation();
+  } catch (e) {
+    $("#sheet-status").replaceChildren(el("span", { className: "error", textContent: e.message }));
+    return;
+  }
+  renderSheet();
+  if (sheet.job && sheet.job.state === "running" && $("#sheet").open) sheet.timer = setTimeout(refreshSheet, 1000);
+}
+
+const jobPercent = (j) => Math.max(0, Math.min(100,
+  j.fetch_done && j.found ? 50 + Math.floor(50 * j.translated / j.found) : j.fraction != null ? Math.floor(50 * j.fraction) : 0));
+
+function renderSheet() {
+  const s = sheet.status, job = sheet.job;
+  const running = job && job.state === "running";
+  const main = $("#sheet-main");
+  main.textContent = s.ready ? "▶ Regarder en indonésien" : running ? "Annuler" : "Préparer la traduction";
+  main.className = running ? "" : "primary";
+  $("#sheet-del").classList.toggle("hidden", !s.ready);
+  $("#sheet-del").textContent = sheet.confirmDelete ? "Sûr ? Clique encore pour supprimer" : "Supprimer";
+  const status = $("#sheet-status");
+  if (sheet.confirmDelete) {
+    status.replaceChildren("La traduction sera effacée du Mac. Pour revoir la vidéo, il faudra la préparer à nouveau.");
+  } else if (running) {
+    const step = job.fetch_done || job.phase >= 2 ? "Traduction…" : (job.fetch_step || "Récupération des sous-titres…");
+    status.replaceChildren(el("div", { textContent: `Préparation… ${jobPercent(job)} % · ${step}` }), bar(jobPercent(job) / 100));
+    if (job.note) status.append(el("div", { className: "note", textContent: job.note }));
+  } else if (job && job.state === "error") {
+    status.replaceChildren(el("span", { className: "error", textContent: `Erreur : ${job.error}` }));
+  } else if (job && job.state === "cancelled") {
+    status.replaceChildren("Annulé.");
+  } else if (sheet.check && !sheet.check.ok) {
+    status.replaceChildren(el("span", { className: "error", textContent: sheet.check.message }));
+  } else {
+    status.replaceChildren(s.watched ? "✓ Déjà vu." : "");
+  }
+}
+
+function afterPreparation() { // badges de la série ou de la grille à jour
+  if (series.id != null && !$("#series-page").classList.contains("hidden")) loadSeries(false);
+}
+
+$("#sheet-main").addEventListener("click", async () => {
+  const s = sheet.status, job = sheet.job, id = sheet.id, main = $("#sheet-main");
+  if (!s || id == null) return;
+  main.disabled = true;
+  try {
+    if (s.ready) {
+      await api("/api/watch", { id }); // VLC ou mpv, selon les réglages
+      pollJobs();
+    } else if (job && job.state === "running") {
+      await api("/api/cancel", { id: job.id });
+    } else {
+      main.textContent = "Vérification des sous-titres…";
+      sheet.check = await api("/api/check", { id });
+      if (sheet.check.ok) sheet.job = await api("/api/prepare", { id });
+      pollJobs();
+    }
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    main.disabled = false;
+  }
+  if (id === sheet.id) refreshSheet();
+});
+$("#sheet-fr").addEventListener("click", async () => {
+  try { await api("/api/play_original", { id: sheet.id }); pollJobs(); } catch (e) { alert(e.message); }
+});
+$("#sheet-back").addEventListener("click", () => $("#sheet").close());
+$("#sheet-del").addEventListener("click", async () => {
+  if (!sheet.confirmDelete) { sheet.confirmDelete = true; renderSheet(); return; }
+  try {
+    await api("/api/forget", { id: sheet.id });
+    sheet.confirmDelete = false;
+    await refreshSheet();
+    afterPreparation();
+    if (state.kind === "ready") loadReady();
+  } catch (e) { alert(e.message); }
+});
+$("#sheet").addEventListener("close", () => clearTimeout(sheet.timer));
 
 // --- Lectures en cours ---------------------------------------------------------
 
@@ -590,7 +1011,7 @@ function renderJobs(jobs) {
     const active = job.state === "running" || job.state === "playing";
     if (active) {
       const where = (job.state === "playing" && job.player ? `Lecture dans ${job.player}` : PHASES[job.phase - 1])
-                    + (job.target === "tele" ? " · pour la télé" : "");
+                    + (job.target === "tele" ? " · préparation, sans lecture" : "");
       card.append(el("div", { className: "phase", textContent:
         `Étape ${job.phase}/3 · ${where} · depuis ${elapsedText(job.started_at)}` }));
       card.append(el("div", {}, job.state === "running" ? el("span", { className: "spinner" }) : null, job.step));

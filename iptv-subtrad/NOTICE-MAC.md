@@ -174,6 +174,21 @@ tu utilises la page ; pour tout arrêter, reviens dans le Terminal et fais **Ctr
 Le lien de la playlist et la clé Claude sont enregistrés uniquement sur ce Mac, dans des
 fichiers que toi seul peux lire.
 
+## La page, comme sur la télé
+
+Quand ta source est un service « Xtream » (serveur + identifiant, ou lien `get.php?username=…`) :
+
+- **Séries** et **Films** montrent des **affiches**, rangées par catégorie (Netflix, Animation…).
+  La recherche cherche dans l'onglet affiché ; tes **recherches récentes** sont sous la barre.
+- Une **série** s'ouvre sur ses saisons : chaque épisode a son image, son titre et sa traduction
+  indonésienne entre parenthèses, avec ✓ Prêt, ✓ Vu ou « Vu à 40 % ».
+- Un clic sur un épisode ou un film ouvre sa **fiche** (image, résumé) avec quatre boutons :
+  **Préparer la traduction** (pendant le travail : Annuler, avec le pourcentage en dessous),
+  puis **▶ Regarder en indonésien** (dans VLC ou mpv) · **Regarder en français** · **Retour** ·
+  **Supprimer** (quand la vidéo est traduite ; deux clics pour confirmer).
+- **Prêtes à regarder** liste les vidéos déjà traduites. **Tout** et **Direct** gardent la liste
+  simple d'avant.
+
 ## Étape 6 bis : regarder sur la télé (application en préparation)
 
 Dans **⚙ Réglages**, choisis **Regarder sur la télé : Activé**, puis **Enregistrer**. La fenêtre

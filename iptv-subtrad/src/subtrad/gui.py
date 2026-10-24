@@ -495,6 +495,50 @@ class GuiApp:
     def video_ready(self, index: int) -> bool:
         return self.is_ready(self.library.get(index))
 
+    def catalog_request(self, path: str, params: dict) -> object:
+        """Catalogue Xtream Codes, pour la télé comme pour cette page. `path` : la fin de
+        l'adresse après « …/catalog » (« », « /categories », « /series », « /series/info »,
+        « /movies », « /movie »)."""
+        catalog = self.catalog
+        lang = params.get("lang", "FR")
+        page = {"category": params.get("category", ""), "query": params.get("q", ""), "lang": lang,
+                "offset": int(params.get("offset", 0)), "limit": min(int(params.get("limit", 60)), 200)}
+        if path == "":
+            return {"available": catalog.available()}
+        if path == "/categories":
+            return catalog.categories(params.get("type", "series"), lang)
+        if path == "/series":
+            return catalog.series(**page)
+        if path == "/series/info":
+            return catalog.series_detail(int(params["id"]), self.video_status)
+        if path == "/movies":
+            return catalog.movies(**page, status=self.video_status)
+        if path == "/movie":
+            return catalog.movie_detail(int(params["id"]), self.video_status)
+        raise LookupError("Introuvable.")
+
+    def play_original(self, index: int) -> Job:
+        """« Regarder en français » : la vidéo telle quelle, sans sous-titres traduits."""
+        channel = self.library.get(index)
+        job = Job(id=uuid.uuid4().hex[:8], title=channel.name, started_at=time.time(), channel_id=index,
+                  channel_url=channel.url, state="playing", phase=3, fetch_done=True,
+                  step="Lecture en français, sans traduction.")
+        self.jobs[job.id] = job
+        self._events[job.id] = (threading.Event(), threading.Event())
+
+        def run() -> None:
+            try:
+                player = self._start_player(job, self.settings["lecteur"], channel.url, title=channel.name)
+                player.wait()
+                job.state, job.step = "done", "Terminé."
+            except Exception as exc:
+                job.state, job.error = "error", friendly_error(exc)
+            finally:
+                self._players.pop(job.id, None)
+
+        threading.Thread(target=run, daemon=True).start()
+        return job
+
     def video_status(self, index: int) -> dict:
         """Prête (traduite) et regardée : badges et reprise de la lecture sur la télé."""
         channel = self.library.get(index)
@@ -845,6 +889,20 @@ class _Handler(BaseHTTPRequestHandler):
                                    "whisper_backend": app.whisper_backend(),
                                    "sources": app.public_sources(),
                                    "kinds": app.library.kinds(), "tele_status": app.tv_status()})
+            if path.startswith("/api/catalog"):
+                try:
+                    return self._json(app.catalog_request(path[len("/api/catalog"):], params))
+                except LookupError as exc:
+                    return self._json({"error": friendly_error(exc).strip("'\"")}, 404)
+            if (method, path) == ("GET", "/api/ready"):
+                return self._json(app.ready_videos())
+            if (method, path) == ("GET", "/api/video"):
+                vid = int(params["id"])
+                return self._json({"id": vid, **app.video_status(vid)})
+            if (method, path) == ("POST", "/api/prepare"):
+                return self._json(app.prepare(int(params["id"])))
+            if (method, path) == ("POST", "/api/play_original"):
+                return self._json(job_public(app.play_original(int(params["id"]))))
             if (method, path) == ("GET", "/api/search"):
                 return self._json(app.search(
                     params.get("q", ""), params.get("kind", ""), params.get("group", ""),
