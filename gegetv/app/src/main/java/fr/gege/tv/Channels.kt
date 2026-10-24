@@ -7,8 +7,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 import java.text.Normalizer
 
 /** Une chaîne en direct de la playlist. */
@@ -27,15 +25,19 @@ fun normalize(text: String): String =
     Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase()
 
 /**
- * La liste des directs : lue une fois depuis la playlist M3U (qui contient aussi des centaines de
+ * La liste des directs de chaque source, demandée au serveur Xtream Codes (`get_live_streams` :
+ * quelques secondes, au lieu de la playlist M3U complète qui contient aussi des centaines de
  * milliers de films et d'épisodes), puis gardée sur la télé.
  */
 class ChannelStore(context: Context) {
-    private val file = File(context.filesDir, "chaines.json")
+    private val dir = context.filesDir
 
-    val savedAt: Long get() = if (file.exists()) file.lastModified() else 0L
+    private fun file(source: Source) = File(dir, "chaines-${source.id}.json")
 
-    suspend fun cached(): List<Channel> = withContext(Dispatchers.IO) {
+    fun savedAt(source: Source): Long = file(source).let { if (it.exists()) it.lastModified() else 0L }
+
+    suspend fun cached(source: Source): List<Channel> = withContext(Dispatchers.IO) {
+        val file = file(source)
         if (!file.exists()) return@withContext emptyList()
         try {
             val array = JSONArray(file.readText())
@@ -45,73 +47,40 @@ class ChannelStore(context: Context) {
         }
     }
 
-    /**
-     * Télécharge la playlist ligne par ligne (jamais entière en mémoire : elle peut peser
-     * plusieurs centaines de Mo) et ne garde que les directs. `onProgress` reçoit 0 à 1, ou -1
-     * si la taille est inconnue.
-     */
-    suspend fun refresh(playlistUrl: String, onProgress: (Float) -> Unit): List<Channel> = withContext(Dispatchers.IO) {
-        val connection = URL(playlistUrl.trim()).openConnection() as HttpURLConnection
-        connection.connectTimeout = 15_000
-        connection.readTimeout = 60_000
-        connection.setRequestProperty("User-Agent", "GegeTV/1.0")
-        try {
-            if (connection.responseCode !in 200..299) throw IOException("le serveur a répondu ${connection.responseCode}")
-            val total = connection.contentLengthLong
-            var read = 0L
-            var lastShown = -1
-            val channels = ArrayList<Channel>()
-            var pending: Pair<String, Map<String, String>>? = null
-            connection.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
-                for (raw in lines) {
-                    read += raw.length + 1
-                    if (total > 0) {
-                        val percent = (100 * read / total).toInt()
-                        if (percent != lastShown) { lastShown = percent; onProgress(percent / 100f) }
-                    }
-                    val line = raw.trim()
-                    when {
-                        line.startsWith("#EXTINF") -> pending = parseExtinf(line)
-                        line.isEmpty() || line.startsWith("#") -> Unit
-                        else -> {
-                            val info = pending
-                            pending = null
-                            if (info != null && isLive(line)) {
-                                val (name, attrs) = info
-                                channels += Channel(name, attrs["group-title"].orEmpty(), attrs["tvg-logo"].orEmpty(), line)
-                            }
-                        }
-                    }
-                }
+    suspend fun refresh(source: Source): List<Channel> {
+        val categories = JSONArray(source.api("get_live_categories")).let { array ->
+            (0 until array.length()).associate { i ->
+                array.getJSONObject(i).let { it.optString("category_id") to it.optString("category_name") }
             }
-            if (channels.isEmpty()) throw IOException("aucune chaîne en direct dans cette playlist")
+        }
+        val streams = JSONArray(source.api("get_live_streams"))
+        val channels = withContext(Dispatchers.Default) {
+            (0 until streams.length()).mapNotNull { i ->
+                val o = streams.getJSONObject(i)
+                val id = o.optString("stream_id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                Channel(o.optString("name").trim(), categories[o.optString("category_id")].orEmpty(),
+                        o.optString("stream_icon"), source.streamUrl(id))
+            }
+        }
+        if (channels.isEmpty()) throw IOException("aucune chaîne en direct chez cette source")
+        withContext(Dispatchers.IO) {
             val array = JSONArray()
             channels.forEach { array.put(it.toJson()) }
-            val staged = File(file.path + ".part")
+            val staged = File(file(source).path + ".part")
             staged.writeText(array.toString())
-            staged.renameTo(file)
-            onProgress(1f)
-            channels
-        } finally {
-            connection.disconnect()
+            staged.renameTo(file(source))
         }
+        return channels
     }
 
-    companion object {
-        private val ATTR = Regex("""([\w-]+)="([^"]*)"""")
+    /** Efface la liste gardée d'une source supprimée. */
+    fun forget(source: Source) {
+        file(source).delete()
+    }
 
-        /** `#EXTINF:-1 tvg-logo="…" group-title="…",Nom` → (nom, attributs). */
-        fun parseExtinf(line: String): Pair<String, Map<String, String>> {
-            val comma = line.lastIndexOf(',')
-            val name = if (comma >= 0) line.substring(comma + 1).trim() else ""
-            val head = if (comma >= 0) line.substring(0, comma) else line
-            return name to ATTR.findAll(head).associate { it.groupValues[1] to it.groupValues[2] }
-        }
-
-        /** Les films et épisodes des serveurs IPTV sont sous /movie/ et /series/ : le reste est du direct. */
-        fun isLive(url: String): Boolean {
-            val path = try { URL(url).path.lowercase() } catch (e: Exception) { return false }
-            return "/movie/" !in path && "/series/" !in path
-        }
+    /** Première ouverture de cette version : la liste de l'ancienne version devient celle de la source. */
+    fun adoptLegacy(source: Source) {
+        val legacy = File(dir, "chaines.json")
+        if (legacy.exists() && !file(source).exists()) legacy.renameTo(file(source))
     }
 }

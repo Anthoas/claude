@@ -35,11 +35,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Button
 import androidx.tv.material3.Card
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.MaterialTheme
@@ -49,8 +47,6 @@ import fr.gege.tv.Channel
 import fr.gege.tv.Logos
 import androidx.compose.runtime.staticCompositionLocalOf
 import fr.gege.tv.normalize
-import java.text.DateFormat
-import java.util.Date
 
 private val GRAY = Color(0xFF9CA3AF)
 
@@ -158,7 +154,8 @@ fun SearchScreen(state: GegeState, onPlay: (Channel) -> Unit) {
             },
             color = GRAY,
         )
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Marge intérieure : l'élément sélectionné grossit un peu, son liseré rouge ne doit pas être coupé.
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)) {
             items(results, key = { it.url }) { channel ->
                 ListItem(
                     selected = false,
@@ -180,25 +177,5 @@ fun SearchScreen(state: GegeState, onPlay: (Channel) -> Unit) {
                 )
             }
         }
-    }
-}
-
-@Composable
-fun SettingsScreen(state: GegeState, onRefresh: (String?) -> Unit) {
-    var url by remember { mutableStateOf(state.playlistUrl) }
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(top = 8.dp)) {
-        Text("Lien de la playlist (M3U)", style = MaterialTheme.typography.titleMedium)
-        TvTextField(value = url, onValueChange = { url = it }, placeholder = "http://…",
-                    keyboardType = KeyboardType.Uri, secret = true, modifier = Modifier.width(720.dp))
-        Text("Le lien contient l'identifiant et le mot de passe : il reste sur cette télé.", color = GRAY)
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(onClick = { onRefresh(url) }, enabled = !state.loading && url.isNotBlank(), colors = plainButtonColors(), border = plainButtonBorder()) {
-                Text("Enregistrer et actualiser la liste des chaînes")
-            }
-        }
-        val when_ = if (state.savedAt > 0) DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(state.savedAt)) else ""
-        Text(if (state.channels.isEmpty()) "Aucune chaîne chargée."
-             else "${state.channels.size} chaînes en direct · liste du $when_", color = GRAY)
-        state.error?.let { Text("Erreur : $it", color = Color(0xFFFCA5A5)) }
     }
 }

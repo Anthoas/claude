@@ -71,7 +71,8 @@ Ce qui est connu :
 - L'écran n'a que des modes 60 Hz et 30 Hz (pas de 24 Hz) : léger « judder » 3:2 inévitable.
 
 ## GégéTV (`gegetv/`) : application des directs pour le père de l'utilisateur
-Android TV, autonome (sans Mac) : lit la playlist M3U, garde les directs, onglets ★ Favoris /
+Android TV, autonome (sans Mac) : sources Xtream Codes (plusieurs, une utilisée à la fois, favoris par
+source ; chaînes par l'API, ~3 s), onglets ★ Favoris /
 Rechercher / Réglages, favoris ajoutés / retirés par **appui long sur OK** dans les listes (question
 Oui / Non ; aucun bouton pendant la vidéo, à la demande de l'utilisateur), zapping haut / bas
 entre favoris (seulement si la chaîne regardée est un favori), favoris protégés contre les pertes

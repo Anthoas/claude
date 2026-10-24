@@ -14,9 +14,11 @@ class MainActivity : ComponentActivity() {
         // l'application, n'est cachée par rien (sur Philips/MediaTek, le fond gris la recouvrait).
         window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         val prefs = Prefs(this)
-        // Réglage depuis un ordinateur, pour ne pas taper le lien à la télécommande :
-        // adb shell am start -S -n fr.gege.tv/.MainActivity --es playlist LIEN
-        intent?.getStringExtra("playlist")?.takeIf { it.startsWith("http") }?.let { prefs.playlistUrl = it }
-        setContent { GegeApp(prefs, ChannelStore(this)) }
+        val store = ChannelStore(this)
+        prefs.migrate(store)
+        // Réglage depuis un ordinateur, pour ne pas taper la source à la télécommande :
+        // adb shell am start -S -n fr.gege.tv/.MainActivity --es playlist LIEN_GET_PHP
+        intent?.getStringExtra("playlist")?.takeIf { it.startsWith("http") }?.let { prefs.provision(it) }
+        setContent { GegeApp(prefs, store) }
     }
 }

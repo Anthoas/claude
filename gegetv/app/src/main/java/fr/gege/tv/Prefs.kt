@@ -3,18 +3,19 @@ package fr.gege.tv
 import android.content.Context
 import org.json.JSONArray
 
-/** Lien de la playlist et chaînes favorites, gardés sur la télé (espace privé de l'application). */
-class Prefs(context: Context) {
+/** Réglages gardés sur la télé (espace privé de l'application) : les sources et leurs favoris. */
+class Prefs(private val context: Context) {
     private val prefs = context.getSharedPreferences("gegetv", Context.MODE_PRIVATE)
 
-    var playlistUrl: String
-        get() = prefs.getString("playlist", "") ?: ""
-        set(value) = prefs.edit().putString("playlist", value.trim()).apply()
+    val sources = SourceStore(context)
 
-    /** Favoris (une copie de chaque chaîne : nom, logo, adresse), gardés à l'abri des pertes. */
-    val favorites = Favorites(context)
+    /** Favoris de cette source. */
+    fun favorites(source: Source) = Favorites(context, source.id)
 
-    /** Favoris des premières versions (rangés ici) : repris une fois par `Favorites`, puis laissés tels quels. */
+    /** Lien de playlist des premières versions (remplacé par les sources). */
+    private val legacyPlaylist: String get() = prefs.getString("playlist", "") ?: ""
+
+    /** Favoris des toutes premières versions (rangés ici) : repris une fois, puis laissés tels quels. */
     val legacyFavorites: List<Channel>
         get() = try {
             val array = JSONArray(prefs.getString("favorites", "[]"))
@@ -22,4 +23,26 @@ class Prefs(context: Context) {
         } catch (e: Exception) {
             emptyList()
         }
+
+    /**
+     * Première ouverture de cette version : l'ancien lien de playlist devient la source « Ma source »,
+     * avec sa liste de chaînes et ses favoris. Ne fait rien s'il y a déjà des sources.
+     */
+    fun migrate(store: ChannelStore) {
+        if (sources.sources.isNotEmpty()) return
+        val source = Source.fromPlaylistLink(legacyPlaylist, "Ma source") ?: return
+        sources.add(source)
+        store.adoptLegacy(source)
+        Favorites.adoptLegacy(context, source.id)
+        val favorites = favorites(source)
+        if (favorites.load().isEmpty() && legacyFavorites.isNotEmpty()) favorites.save(legacyFavorites)
+    }
+
+    /** Lien `get.php` donné par un ordinateur (adb) : ajouté comme source et utilisé. */
+    fun provision(link: String) {
+        val source = Source.fromPlaylistLink(link, "Source ${sources.sources.size + 1}") ?: return
+        if (sources.sources.any { it.server == source.server && it.username == source.username }) return
+        sources.add(source)
+        sources.activeId = source.id
+    }
 }

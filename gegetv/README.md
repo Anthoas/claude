@@ -18,7 +18,13 @@ traduction et sans Mac : elle lit elle-même la playlist M3U.
   ★ sur celles déjà en favori ; **OK appuyé longtemps** sur une chaîne : « Voulez-vous ajouter
   « … » à la liste des favoris ? » Oui / Non. Haut/bas sortent du champ de saisie (sur la Philips,
   le clavier à l'écran se ferme d'abord avec Retour).
-- **Réglages** : lien de la playlist (masqué), « Enregistrer et actualiser la liste des chaînes ».
+- **Réglages**, deux onglets :
+  - **Sources** : les comptes Xtream Codes enregistrés (nom, adresse du serveur, identifiant, mot de
+    passe), « ● Utilisée » sur celle en service. OK sur une source : « Utiliser cette source » ou
+    « Supprimer » (confirmation ; ses favoris et sa liste sont effacés). « + Ajouter une source » :
+    le compte est vérifié auprès du serveur avant d'être gardé. Une seule source à la fois, chacune
+    garde ses favoris (`files/favoris/<source>/`) et sa liste (`files/chaines-<source>.json`).
+  - **Chaînes** : source utilisée, nombre de chaînes, date de la liste, « Recharger maintenant ».
 - **Lecture** : plein écran ; un bandeau d'information **sans bouton** (logo, nom, émission en
   cours avec horaires, avancement et résumé, émission suivante) s'affiche à l'ouverture et à chaque
   appui sur OK, puis se cache après 6 s. Retour revient à la liste. **Chaîne favorite : haut /
@@ -51,9 +57,11 @@ Programme (`Epg.kt`) : demandé au serveur Xtream Codes de la playlist (`player_
 seulement pour la chaîne ouverte et les favoris (le guide complet `xmltv.php` pèse ~40 Mo). Heures
 en temps universel ; gardé 30 min. Sans réponse du serveur, l'appli marche comme avant.
 
-La playlist est lue ligne par ligne (elle peut peser des centaines de Mo) ; seuls les directs
-(adresses hors `/movie/` et `/series/`) sont gardés, dans `files/chaines.json` sur la télé. Les
-adresses sans extension sont lues comme du MPEG-TS (sinon le lecteur ne voyait que le son).
+Les chaînes sont demandées au serveur Xtream Codes (`player_api.php`, `get_live_categories` et
+`get_live_streams` : ~3 s pour 7 000 chaînes, au lieu de ~2 min pour la playlist M3U complète).
+Adresse d'une chaîne : `serveur/identifiant/mot de passe/numéro`, lue comme du MPEG-TS (sinon le
+lecteur ne voyait que le son). Première ouverture de cette version : l'ancien lien `get.php`
+devient la source « Ma source », avec sa liste et ses favoris (rattachés par numéro de chaîne).
 
 Icône et bannière : `art/sanglier.svg` et `art/banniere.html`, rendus en PNG avec Chrome sans
 écran (`--headless --screenshot`).

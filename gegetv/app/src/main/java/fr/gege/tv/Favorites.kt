@@ -15,8 +15,9 @@ import java.io.FileOutputStream
  * - une liste vide ne remplace jamais une liste pleine, sauf si on vient de retirer soi-même le
  *   dernier favori.
  */
-class Favorites(context: Context) {
-    private val dir = File(context.filesDir, "favoris").apply { mkdirs() }
+class Favorites(context: Context, sourceId: String) {
+    /** Un dossier par source : chaque source a ses favoris. */
+    private val dir = File(File(context.filesDir, "favoris"), sourceId).apply { mkdirs() }
     private val main = File(dir, "favoris.json")
     private fun backup(n: Int) = File(dir, "favoris-$n.json")
 
@@ -79,7 +80,24 @@ class Favorites(context: Context) {
         null
     }
 
+    /** Efface les favoris (source supprimée). */
+    fun forget() {
+        dir.deleteRecursively()
+    }
+
     companion object {
+        /**
+         * Première ouverture de cette version : les favoris de l'ancienne version (dossier
+         * `favoris/` sans source) deviennent ceux de la source reprise.
+         */
+        fun adoptLegacy(context: Context, sourceId: String) {
+            val root = File(context.filesDir, "favoris")
+            val target = File(root, sourceId)
+            if (target.exists()) return
+            target.mkdirs()
+            root.listFiles { f -> f.isFile && f.name.startsWith("favoris") }?.forEach { it.renameTo(File(target, it.name)) }
+        }
+
         private const val TAG = "GegeTV"
         private const val BACKUPS = 5
     }

@@ -56,6 +56,8 @@ import fr.gege.tv.Program
 import fr.gege.tv.normalize
 import fr.gege.tv.Prefs
 import fr.gege.tv.R
+import fr.gege.tv.Source
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -71,14 +73,24 @@ private const val SPLASH_MS = 1_500L
 private const val ERROR_MS = 4_000L
 
 /** Tout l'état de l'application : liste des chaînes, favoris, chargement. */
-class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
+class GegeState(private val prefs: Prefs, private val store: ChannelStore, private val scope: CoroutineScope) {
+    /** Lance une tâche qui doit aller au bout même si l'écran qui l'a demandée se ferme. */
+    fun run(block: suspend () -> Unit) {
+        scope.launch { block() }
+    }
+
+    /** Sources enregistrées et celle qui est utilisée (une seule à la fois, chacune ses favoris). */
+    val sources = mutableStateListOf<Source>().apply { addAll(prefs.sources.sources) }
+    var active by mutableStateOf(prefs.sources.active)
+        private set
+    private var favoriteStore = active?.let { prefs.favorites(it) }
+
     val channels = mutableStateListOf<Channel>()
-    val favorites = mutableStateListOf<Channel>().apply { addAll(prefs.favorites.load { prefs.legacyFavorites }) }
+    val favorites = mutableStateListOf<Channel>().apply { favoriteStore?.let { addAll(it.load()) } }
     var loading by mutableStateOf(false)
     var progress by mutableFloatStateOf(-1f)
     var error by mutableStateOf<String?>(null)
-    var savedAt by mutableStateOf(store.savedAt)
-    var playlistUrl by mutableStateOf(prefs.playlistUrl)
+    var savedAt by mutableStateOf(active?.let { store.savedAt(it) } ?: 0L)
     var query by mutableStateOf("")
     var tab by mutableIntStateOf(TAB_FAVORITES)
 
@@ -110,30 +122,90 @@ class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
     fun isUnavailable(channel: Channel) = known.isNotEmpty() && channel.url !in known
 
     /**
-     * Après chargement de la liste : un favori dont l'adresse a changé (le fournisseur a renuméroté
-     * ses chaînes) est retrouvé par son nom et mis à jour. Rien n'est jamais supprimé.
+     * Après chargement de la liste : un favori dont l'adresse a changé (autre serveur, ou chaîne
+     * renumérotée par le fournisseur) est retrouvé par son numéro de chaîne, sinon par son nom, et
+     * mis à jour. Rien n'est jamais supprimé.
      */
     private fun repairFavorites() {
         known = channels.mapTo(HashSet()) { it.url }
         if (known.isEmpty()) return
         val byName = HashMap<String, Channel>()
-        channels.forEach { byName.putIfAbsent(normalize(it.name).trim(), it) }
+        val byNumber = HashMap<String, Channel>()
+        channels.forEach {
+            byName.putIfAbsent(normalize(it.name).trim(), it)
+            byNumber.putIfAbsent(it.url.substringAfterLast('/'), it)
+        }
         var changed = false
         favorites.toList().forEachIndexed { i, fav ->
             if (fav.url in known) return@forEachIndexed
-            val found = byName[normalize(fav.name).trim()] ?: return@forEachIndexed
+            val found = byNumber[fav.url.substringAfterLast('/')]?.takeIf { normalize(it.name) == normalize(fav.name) }
+                ?: byName[normalize(fav.name).trim()] ?: return@forEachIndexed
             if (favorites.none { it.url == found.url }) { // pas de doublon si elle est déjà en favori
                 favorites[i] = found
                 changed = true
             }
         }
-        if (changed) prefs.favorites.save(favorites.toList())
+        if (changed) favoriteStore?.save(favorites.toList())
     }
 
     fun toggleFavorite(channel: Channel) {
         val i = favorites.indexOfFirst { it.url == channel.url }
         if (i >= 0) favorites.removeAt(i) else favorites.add(channel)
-        prefs.favorites.save(favorites.toList(), removedLast = i >= 0 && favorites.isEmpty())
+        favoriteStore?.save(favorites.toList(), removedLast = i >= 0 && favorites.isEmpty())
+    }
+
+    // --- sources ---
+
+    /** Utilise cette source : ses chaînes (gardées sur la télé, sinon chargées) et ses favoris. */
+    suspend fun use(source: Source) {
+        prefs.sources.activeId = source.id
+        active = source
+        favoriteStore = prefs.favorites(source)
+        favorites.clear()
+        favorites.addAll(favoriteStore!!.load())
+        programs.clear()
+        lastPlayed = null
+        query = ""
+        error = null
+        channels.clear()
+        channels.addAll(store.cached(source))
+        savedAt = store.savedAt(source)
+        repairFavorites()
+        if (channels.isEmpty()) refresh()
+        loadPrograms(favorites.toList())
+    }
+
+    /** Vérifie la source auprès de son serveur puis l'enregistre ; renvoie un message d'erreur ou null. */
+    suspend fun addSource(name: String, server: String, username: String, password: String): String? {
+        if (name.isBlank() || server.isBlank() || username.isBlank() || password.isBlank()) {
+            return "Il faut remplir les quatre cases."
+        }
+        val source = Source.new(name, server, username, password)
+        if (sources.any { it.name.equals(source.name, ignoreCase = true) }) return "Une source porte déjà ce nom."
+        source.check()?.let { return "Source refusée : $it." }
+        prefs.sources.add(source)
+        sources.add(source)
+        if (active == null) use(source)
+        return null
+    }
+
+    /** Supprime la source, sa liste de chaînes et ses favoris ; si elle était utilisée, passe à la suivante. */
+    suspend fun removeSource(source: Source) {
+        prefs.sources.remove(source.id)
+        store.forget(source)
+        prefs.favorites(source).forget()
+        sources.remove(source)
+        if (active?.id == source.id) {
+            val next = prefs.sources.active
+            if (next != null) use(next) else {
+                active = null
+                favoriteStore = null
+                favorites.clear()
+                channels.clear()
+                known = emptySet()
+                savedAt = 0L
+            }
+        }
     }
 
     /** Écran d'accueil (sanglier) affiché au démarrage, pendant les mises à jour. */
@@ -147,10 +219,13 @@ class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
      */
     suspend fun start() {
         val began = System.currentTimeMillis()
-        channels.addAll(store.cached())
-        repairFavorites()
-        if (playlistUrl.isBlank()) tab = TAB_SETTINGS
-        else if (channels.isEmpty() || System.currentTimeMillis() - store.savedAt > WEEK_MS) refresh()
+        val source = active
+        if (source == null) tab = TAB_SETTINGS
+        else {
+            channels.addAll(store.cached(source))
+            repairFavorites()
+            if (channels.isEmpty() || System.currentTimeMillis() - store.savedAt(source) > WEEK_MS) refresh()
+        }
         if (favorites.isNotEmpty()) {
             loadingPrograms = true
             try { loadPrograms(favorites.toList()) } finally { loadingPrograms = false }
@@ -161,19 +236,20 @@ class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
         starting = false
     }
 
-    suspend fun refresh(newUrl: String? = null) {
+    /** Recharge la liste des chaînes de la source utilisée. */
+    suspend fun refresh() {
+        val source = active ?: return
         if (loading) return
-        newUrl?.let { prefs.playlistUrl = it; playlistUrl = it.trim() }
-        if (playlistUrl.isBlank()) return
         loading = true
         error = null
         progress = -1f
         try {
-            val fresh = store.refresh(playlistUrl) { progress = it }
+            val fresh = store.refresh(source)
+            if (active?.id != source.id) return // on a changé de source entre-temps
             channels.clear()
             channels.addAll(fresh)
             repairFavorites()
-            savedAt = store.savedAt
+            savedAt = store.savedAt(source)
         } catch (e: Exception) {
             error = e.message ?: e.javaClass.simpleName
         } finally {
@@ -185,7 +261,7 @@ class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
 @Composable
 fun GegeApp(prefs: Prefs, store: ChannelStore) {
     val scope = rememberCoroutineScope()
-    val state = remember { GegeState(prefs, store) }
+    val state = remember { GegeState(prefs, store, scope) }
     var playing by remember { mutableStateOf<Channel?>(null) }
 
     LaunchedEffect(Unit) { state.start() }
@@ -234,7 +310,7 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
                     )
                 }
             } else {
-                Home(state, onPlay = { playing = it }, onRefresh = { url -> scope.launch { state.refresh(url) } })
+                Home(state, onPlay = { playing = it })
                 // Appui long sur une chaîne : on demande avant d'ajouter ou de retirer un favori.
                 state.asking?.let { asked ->
                     val remove = state.isFavorite(asked)
@@ -257,7 +333,7 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun Home(state: GegeState, onPlay: (Channel) -> Unit, onRefresh: (String?) -> Unit) {
+private fun Home(state: GegeState, onPlay: (Channel) -> Unit) {
     val tabFocus = remember { FocusRequester() }
     val channelFocus = remember { FocusRequester() }
     var focusedTab by remember { mutableIntStateOf(-1) } // onglet entouré du liseré rouge
@@ -306,7 +382,7 @@ private fun Home(state: GegeState, onPlay: (Channel) -> Unit, onRefresh: (String
         when (state.tab) {
             TAB_FAVORITES -> FavoritesScreen(state, onPlay, channelFocus)
             TAB_SEARCH -> SearchScreen(state, onPlay)
-            else -> SettingsScreen(state, onRefresh)
+            else -> SettingsScreen(state)
         }
     }
 }
