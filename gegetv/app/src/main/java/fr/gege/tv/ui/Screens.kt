@@ -65,11 +65,13 @@ fun FavoritesScreen(state: GegeState, onPlay: (Channel) -> Unit) {
     if (state.favorites.isEmpty()) {
         Column(Modifier.padding(top = 32.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Aucune chaîne en favori pour l'instant.", style = MaterialTheme.typography.titleLarge)
-            Text("Va dans « Rechercher », ouvre une chaîne, puis appuie sur OK et choisis « ★ Ajouter aux favoris ».",
+            Text("Va dans « Rechercher », trouve une chaîne et garde le doigt appuyé sur OK : GégéTV propose de l'ajouter.",
                  color = GRAY)
         }
         return
     }
+    Text("OK : regarder · OK appuyé longtemps : retirer des favoris", color = GRAY,
+         style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp))
     LazyVerticalGrid(
         columns = GridCells.Fixed(5),
         horizontalArrangement = Arrangement.spacedBy(18.dp),
@@ -78,7 +80,7 @@ fun FavoritesScreen(state: GegeState, onPlay: (Channel) -> Unit) {
     ) {
         items(state.favorites, key = { it.url }) { channel ->
             Column {
-                Card(onClick = { onPlay(channel) }, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+                Card(onClick = { onPlay(channel) }, onLongClick = { state.asking = channel }, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
                     ChannelLogo(channel, Modifier.fillMaxSize())
                 }
                 Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
@@ -117,7 +119,8 @@ fun SearchScreen(state: GegeState, onPlay: (Channel) -> Unit) {
                 state.channels.isEmpty() && !state.loading -> "Aucune chaîne chargée : vérifie le lien dans « Réglages »."
                 state.query.isBlank() -> "${state.channels.size} chaînes en direct. Tape le début d'un nom."
                 results.isEmpty() -> "Aucune chaîne trouvée."
-                else -> "${results.size}${if (results.size == 300) "+" else ""} chaîne(s)"
+                else -> "${results.size}${if (results.size == 300) "+" else ""} chaîne(s) · OK : regarder · " +
+                        "OK appuyé longtemps : ajouter aux favoris"
             },
             color = GRAY,
         )
@@ -126,6 +129,7 @@ fun SearchScreen(state: GegeState, onPlay: (Channel) -> Unit) {
                 ListItem(
                     selected = false,
                     onClick = { onPlay(channel) },
+                    onLongClick = { state.asking = channel },
                     leadingContent = { ChannelLogo(channel, Modifier.width(96.dp).aspectRatio(16f / 9f)) },
                     headlineContent = { Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     supportingContent = { Text(channel.group, maxLines = 1, overflow = TextOverflow.Ellipsis) },

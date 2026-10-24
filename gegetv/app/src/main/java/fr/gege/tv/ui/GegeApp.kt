@@ -79,6 +79,9 @@ class GegeState(private val prefs: Prefs, private val store: ChannelStore) {
             .forEach { (url, found) -> programs[url] = found }
     }
 
+    /** Chaîne pour laquelle la question « ajouter / retirer des favoris ? » est posée. */
+    var asking by mutableStateOf<Channel?>(null)
+
     fun isFavorite(channel: Channel) = favorites.any { it.url == channel.url }
 
     fun toggleFavorite(channel: Channel) {
@@ -140,14 +143,26 @@ fun GegeApp(prefs: Prefs, store: ChannelStore) {
             if (channel != null) {
                 PlayerScreen(
                     channel = channel,
-                    isFavorite = state.isFavorite(channel),
                     programs = state.programsOf(channel),
                     onOpen = { scope.launch { state.loadPrograms(listOf(channel)) } },
-                    onToggleFavorite = { state.toggleFavorite(channel) },
                     onExit = { playing = null },
                 )
             } else {
                 Home(state, onPlay = { playing = it }, onRefresh = { url -> scope.launch { state.refresh(url) } })
+                // Appui long sur une chaîne : on demande avant d'ajouter ou de retirer un favori.
+                state.asking?.let { asked ->
+                    val remove = state.isFavorite(asked)
+                    ConfirmDialog(
+                        question = if (remove) "Voulez-vous retirer « ${asked.name} » des favoris ?"
+                                   else "Voulez-vous ajouter « ${asked.name} » à la liste des favoris ?",
+                        onYes = {
+                            state.toggleFavorite(asked)
+                            state.asking = null
+                            if (!remove) scope.launch { state.loadPrograms(listOf(asked)) }
+                        },
+                        onNo = { state.asking = null },
+                    )
+                }
             }
         }
     }

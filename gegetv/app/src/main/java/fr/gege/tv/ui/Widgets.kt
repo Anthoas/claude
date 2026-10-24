@@ -2,7 +2,12 @@ package fr.gege.tv.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -12,11 +17,17 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
@@ -34,6 +45,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
@@ -105,3 +117,34 @@ fun ProgressBar(fraction: Double?, modifier: Modifier = Modifier) {
     }
 }
 
+
+/**
+ * Question Oui / Non par-dessus l'écran. « Non » est sélectionné d'office : un appui de trop sur
+ * OK ne change rien. Retour = Non.
+ */
+@Composable
+fun ConfirmDialog(question: String, onYes: () -> Unit, onNo: () -> Unit) {
+    val no = remember { FocusRequester() }
+    Dialog(onDismissRequest = onNo) {
+        Column(
+            Modifier
+                .background(Color(0xFF1F2A22), RoundedCornerShape(16.dp))
+                .border(2.dp, Color(0xFF374151), RoundedCornerShape(16.dp))
+                .padding(36.dp)
+                .widthIn(max = 720.dp),
+            verticalArrangement = Arrangement.spacedBy(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(question, style = MaterialTheme.typography.headlineSmall, color = Color.White, textAlign = TextAlign.Center)
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Button(onClick = onYes, modifier = Modifier.width(160.dp)) {
+                    Text("Oui", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                }
+                Button(onClick = onNo, modifier = Modifier.width(160.dp).focusRequester(no)) {
+                    Text("Non", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { runCatching { no.requestFocus() } }
+}

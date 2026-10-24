@@ -63,17 +63,16 @@ import java.util.Locale
 private const val OVERLAY_MS = 6_000L
 
 /**
- * Une chaîne en direct, en plein écran. Un bandeau (nom de la chaîne, bouton favori) s'affiche à
- * l'ouverture et à chaque appui sur OK, puis se cache tout seul. Retour : revenir à la liste.
+ * Une chaîne en direct, en plein écran. Un bandeau d'information (nom de la chaîne, programme),
+ * sans bouton, s'affiche à l'ouverture et à chaque appui sur OK, puis se cache tout seul.
+ * Retour : revenir à la liste. (Les favoris se gèrent dans les listes, par un appui long.)
  */
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
     channel: Channel,
-    isFavorite: Boolean,
     programs: List<Program>,
     onOpen: () -> Unit,
-    onToggleFavorite: () -> Unit,
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -83,7 +82,7 @@ fun PlayerScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     val root = remember { FocusRequester() }
-    val favoriteButton = remember { FocusRequester() }
+    val retryButton = remember { FocusRequester() }
 
     val player = remember(attempt) {
         val http = DefaultHttpDataSource.Factory()
@@ -120,11 +119,9 @@ fun PlayerScreen(
         }
     }
 
-    // Sélection : sur le bouton favori quand le bandeau apparaît, sur l'image quand il disparaît.
-    // (Seulement à ces moments-là : la déplacer à chaque touche empêchait d'atteindre « Retour »
-    // et annulait la touche Retour de la télécommande.)
-    LaunchedEffect(overlay) {
-        runCatching { if (overlay) favoriteButton.requestFocus() else root.requestFocus() }
+    // Sélection : sur l'image, ou sur « Réessayer » quand la chaîne ne répond pas.
+    LaunchedEffect(error) {
+        runCatching { if (error != null) retryButton.requestFocus() else root.requestFocus() }
     }
     // Le bandeau se cache 6 s après la dernière touche (sauf en cas d'erreur).
     LaunchedEffect(overlay, touched, error) {
@@ -141,17 +138,17 @@ fun PlayerScreen(
             .focusRequester(root)
             .focusable()
             .onPreviewKeyEvent { event ->
-                // Retour quitte la chaîne au premier appui, quel que soit le bouton sélectionné
-                // (sans cela, le premier appui servait seulement à « désélectionner » le bouton).
+                // Retour quitte la chaîne au premier appui.
                 if (event.key == Key.Back) {
                     if (event.type == KeyEventType.KeyUp) onExit()
                     return@onPreviewKeyEvent true
                 }
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 touched++
-                // Bandeau caché : OK ou les flèches le font réapparaître.
-                if (!overlay && event.key in listOf(Key.DirectionCenter, Key.Enter, Key.DirectionUp,
-                                                    Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight)) {
+                // OK ou les flèches affichent le bandeau (ou le gardent 6 s de plus). En cas
+                // d'erreur, les touches vont aux boutons « Réessayer » / « Retour ».
+                if (error == null && event.key in listOf(Key.DirectionCenter, Key.Enter, Key.DirectionUp,
+                                                         Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight)) {
                     overlay = true
                     true
                 } else {
@@ -203,10 +200,6 @@ fun PlayerScreen(
                              maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                Button(onClick = { onToggleFavorite(); touched++ }, modifier = Modifier.focusRequester(favoriteButton)) {
-                    Text(if (isFavorite) "★ Retirer des favoris" else "☆ Ajouter aux favoris")
-                }
-                OutlinedButton(onClick = onExit) { Text("Retour") }
             }
         }
 
@@ -218,7 +211,9 @@ fun PlayerScreen(
             ) {
                 Text(message, color = Color(0xFFFCA5A5))
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Button(onClick = { error = null; attempt++ }) { Text("Réessayer") }
+                    Button(onClick = { error = null; attempt++ }, modifier = Modifier.focusRequester(retryButton)) {
+                        Text("Réessayer")
+                    }
                     OutlinedButton(onClick = onExit) { Text("Retour") }
                 }
             }

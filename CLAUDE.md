@@ -69,7 +69,8 @@ Ce qui est connu :
 
 ## GégéTV (`gegetv/`) : application des directs pour le père de l'utilisateur
 Android TV, autonome (sans Mac) : lit la playlist M3U, garde les directs, onglets ★ Favoris /
-Rechercher / Réglages, bandeau favori pendant la lecture, programme (EPG Xtream `get_short_epg`) dans
+Rechercher / Réglages, favoris ajoutés / retirés par **appui long sur OK** dans les listes (question
+Oui / Non ; aucun bouton pendant la vidéo, à la demande de l'utilisateur), programme (EPG Xtream `get_short_epg`) dans
 le bandeau et sous chaque favori. Paquet `fr.gege.tv` (coexiste avec
 Subtrad TV). Icône : tête de sanglier (`gegetv/art/`). Testé sur la TCL avec la playlist de
 l'utilisateur (octobre 2026) : chargement (~2 min la première fois), recherche, favoris, son et

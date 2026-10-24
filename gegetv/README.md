@@ -3,14 +3,19 @@
 Application Android TV pour regarder les **chaînes en direct** d'une playlist IPTV, sans
 traduction et sans Mac : elle lit elle-même la playlist M3U.
 
-- **★ Favoris** (à l'ouverture) : grille des chaînes favorites, OK pour regarder ; sous chaque
+- **★ Favoris** (à l'ouverture) : grille des chaînes favorites, OK pour regarder, **OK appuyé
+  longtemps** pour la retirer (question Oui / Non, « Non » sélectionné d'office) ; sous chaque
   chaîne, l'émission en cours et une barre qui montre où elle en est (mise à jour chaque minute).
 - **Rechercher** : nom d'une chaîne (sans accents ni majuscules), chaînes françaises d'abord ;
-  ★ sur celles déjà en favori. Haut/bas sortent du champ de saisie.
+  ★ sur celles déjà en favori ; **OK appuyé longtemps** sur une chaîne : « Voulez-vous ajouter
+  « … » à la liste des favoris ? » Oui / Non. Haut/bas sortent du champ de saisie (sur la Philips,
+  le clavier à l'écran se ferme d'abord avec Retour).
 - **Réglages** : lien de la playlist (masqué), « Enregistrer et actualiser la liste des chaînes ».
-- **Lecture** : plein écran ; un bandeau (logo, nom, émission en cours avec horaires, avancement
-  et résumé, émission suivante, « ☆ Ajouter aux favoris » / « ★ Retirer », Retour) s'affiche à
-  l'ouverture et à chaque appui sur OK, puis se cache après 6 s.
+- **Lecture** : plein écran ; un bandeau d'information **sans bouton** (logo, nom, émission en
+  cours avec horaires, avancement et résumé, émission suivante) s'affiche à l'ouverture et à chaque
+  appui sur OK, puis se cache après 6 s. Retour revient à la liste. Pas de bouton favori pendant la
+  vidéo : le père avait peur de retirer un favori par erreur. Vidéo dans une `TextureView`
+  (`res/layout/player_view.xml`) : en `SurfaceView`, la Philips (MediaTek) n'affichait que le son.
 
 Programme (`Epg.kt`) : demandé au serveur Xtream Codes de la playlist (`player_api.php`,
 `get_short_epg`, avec le compte et le numéro tirés de l'adresse de la chaîne), une chaîne à la fois,
