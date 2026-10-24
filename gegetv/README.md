@@ -91,7 +91,10 @@ identifiant=…
 mot_de_passe=…
 ```
 
-puis compiler : au premier lancement, l'appli ajoute cette source et l'utilise (une seule fois ; si
+(et, au besoin, `gegetv/favoris-preinstalles.json` : le fichier `favoris.json` de cette source copié
+d'une autre télé avec `adb shell run-as fr.gege.tv cat files/favoris/<source>/favoris.json` ; ignoré
+par git, il contient les adresses des chaînes) puis compiler : au premier lancement, l'appli ajoute
+cette source, l'utilise et lui donne ces favoris (une seule fois ; si
 on la supprime, elle ne revient pas). Retirer le fichier ensuite, sinon toutes les versions compilées
 l'emportent. Le fichier de la source « Gérard » est gardé hors du dépôt dans
 `~/.config/gegetv/source-gerard.properties`.

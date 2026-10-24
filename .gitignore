@@ -9,3 +9,4 @@ build/
 
 # Identifiants d'une source préinstallée dans GégéTV : jamais dans le dépôt
 gegetv/source-preinstallee.properties
+gegetv/favoris-preinstalles.json

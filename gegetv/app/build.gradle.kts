@@ -28,6 +28,10 @@ android {
         buildConfigField("String", "PRESET_SERVER", quoted("serveur"))
         buildConfigField("String", "PRESET_USERNAME", quoted("identifiant"))
         buildConfigField("String", "PRESET_PASSWORD", quoted("mot_de_passe"))
+        // Favoris de cette source, copiés d'une autre télé (gegetv/favoris-preinstalles.json, privé).
+        val favorites = rootProject.file("favoris-preinstalles.json").takeIf { it.exists() }?.readText(Charsets.UTF_8).orEmpty()
+        buildConfigField("String", "PRESET_FAVORITES",
+            "\"" + favorites.trim().replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"")
     }
 
     buildTypes {

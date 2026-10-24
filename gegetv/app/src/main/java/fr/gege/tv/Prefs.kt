@@ -50,6 +50,14 @@ class Prefs(private val context: Context) {
         val same = sources.sources.firstOrNull { it.server == source.server && it.username == source.username }
         if (same == null) sources.add(source)
         sources.activeId = (same ?: source).id
+        // Favoris préinstallés (copiés d'une autre télé), si cette source n'en a pas encore.
+        val favorites = favorites(same ?: source)
+        if (BuildConfig.PRESET_FAVORITES.isNotBlank() && favorites.load().isEmpty()) {
+            runCatching {
+                val array = JSONArray(BuildConfig.PRESET_FAVORITES)
+                favorites.save((0 until array.length()).map { Channel.fromJson(array.getJSONObject(it)) })
+            }
+        }
         prefs.edit().putBoolean("preset_done", true).commit()
     }
 
