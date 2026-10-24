@@ -95,6 +95,16 @@ ce mode. Il demande **mpv** : VLC ne permet pas d'afficher des sous-titres au fi
 Réglages : `--marge N` si des sous-titres arrivent en retard, `--decalage S` si le texte est
 en avance (S < 0) ou en retard (S > 0) sur la parole, `--taille` pour la taille du texte.
 
+## Sources multiples
+
+`sources.py` : une source est un lien M3U, un fichier M3U, ou un serveur (adresse + identifiant +
+mot de passe, converti en `<serveur>/get.php?username=…&password=…&type=m3u_plus&output=ts`).
+Chaque source a sa copie sur le disque (`~/.cache/subtrad/playlists/`, droits 0600) et son nom ;
+toutes sont regroupées dans une seule liste avec un filtre par source. Les numéros de vidéo sont
+stables (`slot × 10 000 000 + rang`) : ajouter, actualiser ou retirer une source ne décale pas les
+autres. Une source n'est enregistrée que si sa playlist se charge ; identifiants et mot de passe ne
+sont jamais envoyés à la page (`Source.public()`) ni dans les messages d'erreur.
+
 ## Mémoire par vidéo
 
 `store.py` garde dans `~/.cache/subtrad/videos/` les sous-titres d'origine (JSON) et la traduction

@@ -87,8 +87,8 @@ class FakeXtream:
 
 def make_catalog(tmp_path, fake=None, channels=None, clock=lambda: 1000.0):
     fake = fake or FakeXtream()
-    channels = channels if channels is not None else parse_m3u(PLAYLIST)
-    return Catalog(lambda: fake, lambda: channels, tmp_path / "xtream", clock=clock), fake
+    entries = list(enumerate(channels if channels is not None else parse_m3u(PLAYLIST)))
+    return Catalog(lambda: fake, lambda: entries, tmp_path / "xtream", clock=clock), fake
 
 
 def test_name_helpers():
@@ -221,7 +221,7 @@ def tele(tmp_path):
     # Comme le vrai programme : le catalogue n'existe que si le lien de la playlist est Xtream.
     app.catalog = Catalog(
         lambda: fake if XtreamAccount.from_playlist_source(app.settings["playlist_source"]) else None,
-        lambda: app.library.channels, tmp_path / "xtream")
+        lambda: app.library.entries, tmp_path / "xtream")
     app.settings.update(tele="on")
     app.tv = TvAccess(app, port=0, host="127.0.0.1")
     app.apply_tv()
@@ -321,3 +321,34 @@ def test_episode_titles_are_translated_in_the_background(tmp_path, monkeypatch):
             break
         time.sleep(0.05)
     assert later["seasons"][0]["episodes"][0]["title_translated"] == "ID L'hiver vient"
+
+
+def test_xtream_account_comes_from_the_sources(tmp_path):
+    from subtrad.sources import build_source
+
+    app = GuiApp(Settings(tmp_path / "config"), tmp_path / "cache" / "playlist.m3u",
+                 whisper_backend=lambda: None, store=VideoStore(tmp_path / "videos"))
+    assert app._xtream_client() is None
+    app.sources = [build_source("fichier", "Fichier", slot=0)]
+    assert app._xtream_client() is None  # un fichier n'a pas de compte
+    app.sources.append(build_source("m3u", "Lien", slot=1, url=SOURCE))
+    account = app._xtream_client().account
+    assert (account.base, account.username, account.password) == ("http://portal.example:8080", "MONUSER", "MONMDP")
+    app.sources = [build_source("xtream", "Serveur", slot=2, server="portal.example:8080",
+                                username="MONUSER", password="MONMDP")]
+    assert app._xtream_client().account.base == "http://portal.example:8080"
+
+
+def test_catalog_uses_stable_video_numbers_of_any_source(tmp_path):
+    from subtrad.gui import Library
+    from subtrad.sources import SLOT_SIZE
+
+    library = Library()
+    library.set_source(0, parse_m3u("#EXTM3U\n#EXTINF:-1,Autre\nhttp://autre.example/a.ts\n"))
+    library.set_source(5, parse_m3u(PLAYLIST))
+    fake = FakeXtream()
+    catalog = Catalog(lambda: fake, lambda: library.entries, tmp_path / "xtream")
+    first = catalog.series_detail(77)["seasons"][0]["episodes"][0]
+    assert first["id"] == 5 * SLOT_SIZE  # S01E01 = 1re vidéo de la source n° 5
+    assert library.get(first["id"]).url.endswith("/1001.mkv")
+    assert catalog.movies()["items"][0]["id"] == 5 * SLOT_SIZE + 3

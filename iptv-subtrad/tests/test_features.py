@@ -285,9 +285,10 @@ def test_whisper_fallback_when_there_are_no_subtitles(tmp_path):
     app.whisper_backend = lambda: "fake"
     app._transcriber_factory = FakeWhisper
     app.load_playlist(text=f"#EXTM3U\n#EXTINF:-1 group-title=\"Films\",Film muet\n{film}\n")
-    assert app.check(0)["mode"] == "whisper"
+    muet = app.library.search("muet")["items"][0]["id"]
+    assert app.check(muet)["mode"] == "whisper"
     FakePlayer.started.clear()
-    job = app.watch(0)
+    job = app.watch(muet)
     job = wait_state(app, job.id, {"done", "error"})
     assert job.state == "done", job.error
     srt = FakePlayer.started[-1][1]

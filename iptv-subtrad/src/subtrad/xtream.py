@@ -191,7 +191,7 @@ class Catalog:
     def __init__(
         self,
         client_factory: Callable[[], XtreamClient | None],
-        channels: Callable[[], list[Channel]],
+        channels: Callable[[], list[tuple[int, Channel]]],  # (numéro de la vidéo, vidéo)
         directory: Path | None = None,
         clock: Callable[[], float] = time.time,
         guide: EpisodeGuide | None = None,
@@ -209,7 +209,7 @@ class Catalog:
         self._loaded_at = 0.0
         self._refreshing = False
         self._info: dict[int, tuple[float, dict]] = {}
-        self._index_for: list[Channel] | None = None
+        self._index_for: list | None = None
         self._index: dict[tuple[str, str], tuple[int, str]] = {}
         self._secrets: list[str] = []
         self._stream_hosts: set[str] = set()
@@ -274,11 +274,11 @@ class Catalog:
     # --- lien avec la playlist ---
 
     def _video_index(self) -> dict[tuple[str, str], tuple[int, str]]:
-        """(« series »|« movie », numéro) → (entrée de la playlist, extension)."""
+        """(« series »|« movie », numéro Xtream) → (numéro de la vidéo dans subtrad, extension)."""
         channels = self._channels()
         if self._index_for is not channels:
             index, hosts = {}, set()
-            for i, channel in enumerate(channels):
+            for i, channel in channels:
                 url = urlparse(channel.url)
                 m = _PATH_RE.search(url.path)
                 if m:
